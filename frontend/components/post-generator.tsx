@@ -1,0 +1,301 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { apiStream, apiPost, apiPatch } from "@/lib/api";
+import {
+  Send,
+  Loader2,
+  RefreshCw,
+  Copy,
+  Check,
+  Clock,
+  Rocket,
+  Save,
+} from "lucide-react";
+
+export default function PostGenerator() {
+  const [prompt, setPrompt] = useState("");
+  const [draft, setDraft] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  async function handleGenerate() {
+    if (!prompt.trim()) return;
+    setIsGenerating(true);
+    setDraft("");
+    setDraftId(null);
+    setError("");
+    setMessage("");
+
+    try {
+      await apiStream(
+        "/api/content/generate",
+        { prompt },
+        (token) => {
+          setDraft((prev) => prev + token);
+        },
+        () => {
+          // no-op: we set isGenerating=false after fetching the draft ID below
+        }
+      );
+      // After generation completes, fetch the latest draft to get its ID
+      const { apiGet: fetchGet } = await import("@/lib/api");
+      const list = await fetchGet<{ id: string }[]>(
+        "/api/content?status=draft"
+      );
+      if (list.length > 0) {
+        setDraftId(list[0].id);
+      }
+      setIsGenerating(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+      setIsGenerating(false);
+    }
+  }
+
+  async function handleRegenerate() {
+    if (draftId) {
+      try {
+        const { apiDelete } = await import("@/lib/api");
+        await apiDelete(`/api/content/${draftId}`);
+      } catch {
+        // ignore
+      }
+    }
+    handleGenerate();
+  }
+
+  async function handleSaveDraft() {
+    if (!draftId) return;
+    try {
+      await apiPatch(`/api/content/${draftId}`, { body: draft });
+      setMessage("Draft saved");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    }
+  }
+
+  async function handlePublishNow() {
+    if (!draftId) return;
+    setPublishing(true);
+    setError("");
+    try {
+      // Save latest edits first
+      await apiPatch(`/api/content/${draftId}`, { body: draft });
+      await apiPost(`/api/content/${draftId}/publish`);
+      setMessage("Published to LinkedIn!");
+      setDraft("");
+      setDraftId(null);
+      setPrompt("");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to publish");
+    }
+    setPublishing(false);
+  }
+
+  async function handleSchedule() {
+    if (!draftId || !scheduleDate) return;
+    setScheduling(true);
+    setError("");
+    try {
+      await apiPatch(`/api/content/${draftId}`, { body: draft });
+      await apiPost(`/api/content/${draftId}/schedule`, {
+        scheduled_at: new Date(scheduleDate).toISOString(),
+      });
+      setMessage("Post scheduled!");
+      setDraft("");
+      setDraftId(null);
+      setPrompt("");
+      setShowScheduler(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to schedule");
+    }
+    setScheduling(false);
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(draft);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const charCount = draft.length;
+  const charLimit = 3000;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight mb-1">
+          Generate a <span className="gradient-text">Post</span>
+        </h2>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Describe what you want to post about. The AI will write it in your
+          voice.
+        </p>
+      </div>
+
+      {/* Prompt input */}
+      <div className="glass-card p-4 flex gap-3">
+        <input
+          type="text"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !isGenerating && handleGenerate()}
+          placeholder="e.g. Share my thoughts on why most startups fail at hiring..."
+          className="input-field flex-1"
+          disabled={isGenerating}
+        />
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating || !prompt.trim()}
+          className="btn-primary px-5 py-2.5 flex items-center gap-2 text-sm shrink-0"
+        >
+          {isGenerating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+          Generate
+        </button>
+      </div>
+
+      {/* Draft editor */}
+      {(draft || isGenerating) && (
+        <div className="glass-card p-5 space-y-4 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-[var(--muted-foreground)]">
+              Draft
+              {isGenerating && (
+                <span className="ml-2 text-[var(--accent)] animate-pulse">
+                  generating...
+                </span>
+              )}
+            </h3>
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={
+                  charCount > charLimit
+                    ? "text-[var(--destructive)]"
+                    : "text-[var(--muted-foreground)]"
+                }
+              >
+                {charCount.toLocaleString()}/{charLimit.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={12}
+            className="input-field resize-y font-mono text-sm leading-relaxed !p-4"
+            disabled={isGenerating}
+          />
+
+          {/* Action buttons */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRegenerate}
+                disabled={isGenerating}
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg disabled:opacity-50"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Regenerate
+              </button>
+              <button
+                onClick={handleCopy}
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-[var(--success)]" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <button
+                onClick={handleSaveDraft}
+                disabled={!draftId}
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg disabled:opacity-50"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowScheduler(!showScheduler)}
+                disabled={!draftId || isGenerating}
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg disabled:opacity-50"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Schedule
+              </button>
+              <button
+                onClick={handlePublishNow}
+                disabled={!draftId || isGenerating || publishing}
+                className="btn-primary px-4 py-1.5 text-sm flex items-center gap-1.5"
+              >
+                {publishing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Rocket className="h-3.5 w-3.5" />
+                )}
+                Post Now
+              </button>
+            </div>
+          </div>
+
+          {/* Schedule picker */}
+          {showScheduler && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--muted)] border border-[var(--border)]">
+              <input
+                type="datetime-local"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                className="input-field !w-auto"
+              />
+              <button
+                onClick={handleSchedule}
+                disabled={!scheduleDate || scheduling}
+                className="btn-primary px-4 py-1.5 text-sm flex items-center gap-1.5"
+              >
+                {scheduling ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Clock className="h-3.5 w-3.5" />
+                )}
+                Confirm
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Messages */}
+      {message && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--success)]/10 border border-[var(--success)]/20 text-sm text-[var(--success)] animate-fade-in">
+          <Check className="h-4 w-4 shrink-0" />
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--destructive)]/10 border border-[var(--destructive)]/20 text-sm text-[var(--destructive)] animate-fade-in">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
