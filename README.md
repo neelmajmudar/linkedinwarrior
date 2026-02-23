@@ -86,7 +86,7 @@ Open http://localhost:3000
 - **Frontend**: Next.js 14, TailwindCSS, Lucide icons
 - **Backend**: FastAPI, Pydantic v2, APScheduler
 - **Database**: Supabase (Postgres + pgvector + Auth + RLS)
-- **AI**: Anthropic Claude 3.5 Sonnet (generation), OpenAI text-embedding-3-small (embeddings)
+- **AI**: OpenAI GPT-5 (generation), OpenAI text-embedding-3-small (embeddings)
 - **LinkedIn Scraping**: Apify `harvestapi/linkedin-profile-posts`
 - **LinkedIn Posting**: Unipile REST API
 
