@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import Onboarding from "./onboarding";
 import PostGenerator from "./post-generator";
 import ContentList from "./content-list";
@@ -15,6 +15,7 @@ import {
   LogOut,
   Linkedin,
   Zap,
+  Loader2,
 } from "lucide-react";
 
 type Tab = "generate" | "posts" | "calendar";
@@ -23,9 +24,20 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("generate");
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     checkOnboardingStatus();
+
+    // Listen for message from the Unipile auth popup callback
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type === "linkedin-connected") {
+        setLinkedinConnected(true);
+        setConnecting(false);
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   async function checkOnboardingStatus() {
@@ -46,6 +58,27 @@ export default function Dashboard() {
       setLinkedinConnected(status.connected);
     } catch {
       setLinkedinConnected(false);
+    }
+  }
+
+  async function connectLinkedin() {
+    setConnecting(true);
+    try {
+      const data = await apiPost<{ auth_url: string }>("/api/linkedin/connect");
+      if (data.auth_url) {
+        // Open Unipile hosted auth in a popup
+        const w = 600, h = 700;
+        const left = window.screenX + (window.outerWidth - w) / 2;
+        const top = window.screenY + (window.outerHeight - h) / 2;
+        window.open(
+          data.auth_url,
+          "linkedin-auth",
+          `width=${w},height=${h},left=${left},top=${top}`
+        );
+      }
+    } catch (err) {
+      console.error("Failed to start LinkedIn connection:", err);
+      setConnecting(false);
     }
   }
 
@@ -97,18 +130,25 @@ export default function Dashboard() {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 text-sm">
-            <Linkedin className="h-4 w-4 text-[var(--primary)]" />
-            <span
-              className={
-                linkedinConnected
-                  ? "text-[var(--success)]"
-                  : "text-[var(--muted-foreground)]"
-              }
+          {linkedinConnected ? (
+            <div className="flex items-center gap-1.5 text-sm">
+              <Linkedin className="h-4 w-4 text-[var(--success)]" />
+              <span className="text-[var(--success)]">Connected</span>
+            </div>
+          ) : (
+            <button
+              onClick={connectLinkedin}
+              disabled={connecting}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {linkedinConnected ? "Connected" : "Not connected"}
-            </span>
-          </div>
+              {connecting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Linkedin className="h-4 w-4" />
+              )}
+              {connecting ? "Connecting…" : "Connect LinkedIn"}
+            </button>
+          )}
           <button
             onClick={() => supabase.auth.signOut()}
             className="btn-ghost p-2 rounded-lg"

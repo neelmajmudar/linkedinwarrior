@@ -16,7 +16,7 @@ async def get_hosted_auth_url(user_id: str) -> str:
                 "type": "LINKEDIN",
                 "api_url": settings.UNIPILE_DSN,
                 "expiresOn": "2099-01-01T00:00:00.000Z",
-                "notify_url": f"{settings.FRONTEND_URL}/api/linkedin/callback",
+                "notify_url": f"{settings.FRONTEND_URL}/linkedin/callback",
             },
         )
         resp.raise_for_status()
@@ -63,12 +63,40 @@ async def publish_post(user_id: str, post_text: str) -> str:
 
 
 async def check_connection(user_id: str) -> dict:
-    """Check if the user has a connected LinkedIn account via Unipile."""
+    """Check if the user has a connected LinkedIn account via Unipile.
+
+    First checks the local DB. If no account_id is stored, queries the
+    Unipile API for existing LinkedIn accounts and syncs the first one found.
+    """
     db = get_supabase()
     user_result = db.table("users").select("unipile_account_id").eq("id", user_id).execute()
     if not user_result.data:
         return {"connected": False}
+
     account_id = user_result.data[0].get("unipile_account_id")
-    return {
-        "connected": bool(account_id),
-    }
+    if account_id:
+        return {"connected": True}
+
+    # No account_id stored locally — check Unipile for existing LinkedIn accounts
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{settings.UNIPILE_DSN}/api/v1/accounts",
+                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            accounts = data if isinstance(data, list) else data.get("items", [])
+            for acct in accounts:
+                if acct.get("type", "").upper() == "LINKEDIN":
+                    found_id = acct.get("id")
+                    if found_id:
+                        # Sync to local DB
+                        db.table("users").update({
+                            "unipile_account_id": found_id,
+                        }).eq("id", user_id).execute()
+                        return {"connected": True}
+    except Exception:
+        pass
+
+    return {"connected": False}
