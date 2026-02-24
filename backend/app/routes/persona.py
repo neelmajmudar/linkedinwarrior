@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from app.auth import get_current_user
 from app.db import get_supabase
-from app.services.persona import build_voice_profile
+from app.agents.persona_analyzer import build_voice_profile
 
 router = APIRouter(prefix="/api/persona", tags=["persona"])
 

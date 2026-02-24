@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from app.auth import get_current_user
 from app.db import get_supabase
 from app.models import GenerateRequest, UpdateContentRequest, ScheduleRequest, ContentItem
-from app.services.generator import generate_post_stream
+from app.agents.post_generator import generate_post_stream
 
 router = APIRouter(prefix="/api/content", tags=["content"])
 

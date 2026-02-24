@@ -26,6 +26,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Windsurf IDE
+.windsurf/
+
 # Python
 *.egg-info/
 *.egg
