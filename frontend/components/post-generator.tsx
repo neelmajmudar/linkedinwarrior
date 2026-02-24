@@ -216,10 +216,10 @@ export default function PostGenerator() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold tracking-tight mb-1">
+        <h2 className="text-2xl tracking-tight text-[#1a1a1a] mb-1">
           Generate a <span className="gradient-text">Post</span>
         </h2>
-        <p className="text-sm text-[var(--muted-foreground)]">
+        <p className="text-sm text-gray-500">
           Describe what you want to post about. The AI will write it in your
           voice.
         </p>
@@ -254,10 +254,10 @@ export default function PostGenerator() {
       {(draft || isGenerating) && (
         <div className="glass-card p-5 space-y-4 animate-fade-in">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-[var(--muted-foreground)]">
+            <h3 className="text-sm font-medium text-gray-500">
               Draft
               {isGenerating && (
-                <span className="ml-2 text-[var(--accent)] animate-pulse">
+                <span className="ml-2 text-warm-400 animate-pulse">
                   generating...
                 </span>
               )}
@@ -266,8 +266,8 @@ export default function PostGenerator() {
               <span
                 className={
                   charCount > charLimit
-                    ? "text-[var(--destructive)]"
-                    : "text-[var(--muted-foreground)]"
+                    ? "text-red-500"
+                    : "text-gray-400"
                 }
               >
                 {charCount.toLocaleString()}/{charLimit.toLocaleString()}
@@ -290,17 +290,17 @@ export default function PostGenerator() {
               <button
                 onClick={handleRegenerate}
                 disabled={isGenerating}
-                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg disabled:opacity-50"
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full disabled:opacity-50"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Regenerate
               </button>
               <button
                 onClick={handleCopy}
-                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg"
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full"
               >
                 {copied ? (
-                  <Check className="h-3.5 w-3.5 text-[var(--success)]" />
+                  <Check className="h-3.5 w-3.5 text-green-600" />
                 ) : (
                   <Copy className="h-3.5 w-3.5" />
                 )}
@@ -309,7 +309,7 @@ export default function PostGenerator() {
               <button
                 onClick={handleSaveDraft}
                 disabled={!draftId}
-                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg disabled:opacity-50"
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full disabled:opacity-50"
               >
                 <Save className="h-3.5 w-3.5" />
                 Save
@@ -320,7 +320,7 @@ export default function PostGenerator() {
               <button
                 onClick={() => setShowScheduler(!showScheduler)}
                 disabled={!draftId || isGenerating}
-                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-[var(--border)] rounded-lg disabled:opacity-50"
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full disabled:opacity-50"
               >
                 <Clock className="h-3.5 w-3.5" />
                 Schedule
@@ -354,11 +354,11 @@ export default function PostGenerator() {
                 <img
                   src={imagePreview}
                   alt="Post image preview"
-                  className="max-h-40 rounded-lg border border-[var(--border)] object-cover"
+                  className="max-h-40 rounded-lg border border-gray-200 object-cover"
                 />
                 <button
                   onClick={removeImage}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[var(--destructive)] text-white flex items-center justify-center hover:opacity-80"
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -381,7 +381,7 @@ export default function PostGenerator() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isGenerating}
-                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-dashed border-[var(--border)] rounded-lg disabled:opacity-50 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50 transition-colors"
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-dashed border-gray-300 rounded-full disabled:opacity-50 text-gray-400 hover:text-[#1a1a1a] hover:border-gray-400 transition-colors"
               >
                 <ImagePlus className="h-3.5 w-3.5" />
                 Add Image
@@ -391,7 +391,7 @@ export default function PostGenerator() {
 
           {/* Schedule picker */}
           {showScheduler && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-[var(--muted)] border border-[var(--border)]">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
               <input
                 type="datetime-local"
                 value={scheduleDate}
@@ -417,13 +417,13 @@ export default function PostGenerator() {
 
       {/* Messages */}
       {message && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--success)]/10 border border-[var(--success)]/20 text-sm text-[var(--success)] animate-fade-in">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 border border-green-100 text-sm text-green-700 animate-fade-in">
           <Check className="h-4 w-4 shrink-0" />
           {message}
         </div>
       )}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--destructive)]/10 border border-[var(--destructive)]/20 text-sm text-[var(--destructive)] animate-fade-in">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-100 text-sm text-red-600 animate-fade-in">
           {error}
         </div>
       )}

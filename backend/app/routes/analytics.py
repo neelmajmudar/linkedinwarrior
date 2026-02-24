@@ -6,6 +6,7 @@ from app.services.analytics import (
     get_follower_history,
     get_post_performance,
     get_engagement_summary,
+    get_metric_trends,
 )
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -18,11 +19,24 @@ async def get_analytics(user: dict = Depends(get_current_user)):
     followers = get_follower_history(user["id"], days=90)
     posts = get_post_performance(user["id"], limit=20)
 
+    trends = get_metric_trends(user["id"], days=90)
+
     return {
         "summary": summary,
         "follower_history": followers,
         "top_posts": posts,
+        "metric_trends": trends,
     }
+
+
+@router.get("/trends")
+async def get_trends(
+    days: int = 30,
+    user: dict = Depends(get_current_user),
+):
+    """Get daily aggregated metric trends."""
+    trends = get_metric_trends(user["id"], days=days)
+    return {"metric_trends": trends}
 
 
 @router.get("/followers")

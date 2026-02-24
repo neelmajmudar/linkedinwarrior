@@ -24,10 +24,10 @@ interface ContentItem {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  draft: "bg-[#94a3b8]",
-  scheduled: "bg-[#fbbf24]",
-  published: "bg-[#34d399]",
-  failed: "bg-[var(--destructive)]",
+  draft: "bg-gray-400",
+  scheduled: "bg-amber-500",
+  published: "bg-green-500",
+  failed: "bg-red-500",
 };
 
 export default function CalendarView() {
@@ -73,7 +73,7 @@ export default function CalendarView() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold tracking-tight">
+      <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
         Content <span className="gradient-text">Calendar</span>
       </h2>
 
@@ -81,16 +81,16 @@ export default function CalendarView() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="btn-ghost p-2 rounded-lg border border-[var(--border)]"
+          className="p-2 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-[#1a1a1a] transition-colors"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h3 className="text-lg font-semibold tracking-tight">
+        <h3 className="text-lg tracking-tight text-[#1a1a1a]">
           {format(currentMonth, "MMMM yyyy")}
         </h3>
         <button
           onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="btn-ghost p-2 rounded-lg border border-[var(--border)]"
+          className="p-2 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-[#1a1a1a] transition-colors"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
@@ -99,11 +99,11 @@ export default function CalendarView() {
       {/* Calendar grid */}
       <div className="glass-card overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-7 border-b border-[var(--border)]">
+        <div className="grid grid-cols-7 border-b border-gray-200">
           {weekDays.map((d) => (
             <div
               key={d}
-              className="px-2 py-2.5 text-center text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider"
+              className="px-2 py-2.5 text-center text-xs font-medium text-gray-400 uppercase tracking-wider"
             >
               {d}
             </div>
@@ -116,7 +116,7 @@ export default function CalendarView() {
           {Array.from({ length: startDayOfWeek }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="min-h-[80px] border-t border-r border-[var(--border)] bg-[var(--background)]/50"
+              className="min-h-[80px] border-t border-r border-gray-100 bg-gray-50/50"
             />
           ))}
 
@@ -129,17 +129,17 @@ export default function CalendarView() {
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDay(day)}
-                className={`min-h-[80px] border-t border-r border-[var(--border)] p-1.5 text-left transition-all ${
+                className={`min-h-[80px] border-t border-r border-gray-100 p-1.5 text-left transition-all ${
                   isSelected
-                    ? "bg-[var(--primary)]/5 border-[var(--primary)]/20"
-                    : "hover:bg-[var(--muted)]"
+                    ? "bg-warm-50 border-warm-200"
+                    : "hover:bg-gray-50"
                 }`}
               >
                 <span
                   className={`text-xs font-medium inline-flex ${
                     isToday
-                      ? "bg-[var(--primary)] text-white rounded-full w-6 h-6 items-center justify-center"
-                      : "text-[var(--muted-foreground)]"
+                      ? "bg-[#1a1a1a] text-white rounded-full w-6 h-6 items-center justify-center"
+                      : "text-gray-500"
                   }`}
                 >
                   {format(day, "d")}
@@ -151,13 +151,13 @@ export default function CalendarView() {
                         <div
                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status] || "bg-[#94a3b8]"}`}
                         />
-                        <span className="text-[10px] text-[var(--muted-foreground)] truncate">
+                        <span className="text-[10px] text-gray-400 truncate">
                           {item.body.slice(0, 25)}...
                         </span>
                       </div>
                     ))}
                     {dayItems.length > 3 && (
-                      <span className="text-[10px] text-[var(--muted-foreground)]">
+                      <span className="text-[10px] text-gray-400">
                         +{dayItems.length - 3} more
                       </span>
                     )}
@@ -172,11 +172,11 @@ export default function CalendarView() {
       {/* Selected day detail */}
       {selectedDay && (
         <div className="space-y-3 animate-fade-in">
-          <h3 className="text-sm font-medium text-[var(--muted-foreground)]">
+          <h3 className="text-sm font-medium text-gray-500">
             {format(selectedDay, "EEEE, MMMM d, yyyy")}
           </h3>
           {selectedDayItems.length === 0 ? (
-            <p className="text-sm text-[var(--muted-foreground)] opacity-60">
+            <p className="text-sm text-gray-400">
               No posts for this day.
             </p>
           ) : (
@@ -189,16 +189,16 @@ export default function CalendarView() {
                   <div
                     className={`w-2 h-2 rounded-full ${STATUS_DOT[item.status] || "bg-[#94a3b8]"}`}
                   />
-                  <span className="text-xs font-medium capitalize text-[var(--foreground)]">
+                  <span className="text-xs font-medium capitalize text-[#1a1a1a]">
                     {item.status}
                   </span>
                   {item.scheduled_at && item.status === "scheduled" && (
-                    <span className="text-xs text-[var(--muted-foreground)]">
+                    <span className="text-xs text-gray-400">
                       at {format(new Date(item.scheduled_at), "h:mm a")}
                     </span>
                   )}
                 </div>
-                <p className="text-sm whitespace-pre-wrap leading-relaxed text-[var(--card-foreground)]">
+                <p className="text-sm whitespace-pre-wrap leading-relaxed text-[#1a1a1a]">
                   {item.body.length > 300
                     ? item.body.slice(0, 300) + "..."
                     : item.body}
@@ -211,7 +211,7 @@ export default function CalendarView() {
 
       {loading && (
         <div className="flex justify-center py-4">
-          <FileText className="h-5 w-5 animate-pulse text-[var(--primary)]" />
+          <FileText className="h-5 w-5 animate-pulse text-warm-500" />
         </div>
       )}
     </div>

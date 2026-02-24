@@ -9,6 +9,7 @@ import ContentList from "./content-list";
 import CalendarView from "./calendar-view";
 import Engagement from "./engagement";
 import AnalyticsDashboard from "./analytics-dashboard";
+import CreatorAnalysis from "./creator-analysis";
 import {
   Sword,
   PenTool,
@@ -20,9 +21,10 @@ import {
   BarChart3,
   Zap,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 
-type Tab = "generate" | "posts" | "calendar" | "engage" | "analytics";
+type Tab = "generate" | "posts" | "calendar" | "engage" | "research" | "analytics";
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("generate");
@@ -90,7 +92,7 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="w-10 h-10 rounded-xl bg-[var(--primary)] flex items-center justify-center animate-pulse-glow">
+          <div className="w-10 h-10 rounded-full bg-warm-500 flex items-center justify-center animate-pulse-glow">
             <Sword className="h-5 w-5 text-white" />
           </div>
           <div className="skeleton h-2 w-24 rounded-full" />
@@ -125,6 +127,11 @@ export default function Dashboard() {
       icon: <MessageSquare className="h-4 w-4" />,
     },
     {
+      id: "research",
+      label: "Research",
+      icon: <Sparkles className="h-4 w-4" />,
+    },
+    {
       id: "analytics",
       label: "Analytics",
       icon: <BarChart3 className="h-4 w-4" />,
@@ -132,28 +139,28 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="glass sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
             <Sword className="h-4 w-4 text-white" />
           </div>
-          <span className="font-semibold text-lg tracking-tight gradient-text">
+          <span className="text-lg tracking-tight text-[#1a1a1a]">
             LinkedInWarrior
           </span>
         </div>
         <div className="flex items-center gap-4">
           {linkedinConnected ? (
             <div className="flex items-center gap-1.5 text-sm">
-              <Linkedin className="h-4 w-4 text-[var(--success)]" />
-              <span className="text-[var(--success)]">Connected</span>
+              <Linkedin className="h-4 w-4 text-green-600" />
+              <span className="text-green-700 font-medium">Connected</span>
             </div>
           ) : (
             <button
               onClick={connectLinkedin}
               disabled={connecting}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
             >
               {connecting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -165,7 +172,7 @@ export default function Dashboard() {
           )}
           <button
             onClick={() => supabase.auth.signOut()}
-            className="btn-ghost p-2 rounded-lg"
+            className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
@@ -174,7 +181,7 @@ export default function Dashboard() {
       </header>
 
       {/* Tab navigation */}
-      <nav className="border-b border-[var(--border)] px-6">
+      <nav className="border-b border-gray-200 px-6 bg-white">
         <div className="max-w-4xl mx-auto flex gap-1">
           {tabs.map((t) => (
             <button
@@ -182,8 +189,8 @@ export default function Dashboard() {
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
                 tab === t.id
-                  ? "border-[var(--primary)] text-[var(--foreground)]"
-                  : "border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--border-hover)]"
+                  ? "border-[#1a1a1a] text-[#1a1a1a]"
+                  : "border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               {t.icon}
@@ -199,6 +206,7 @@ export default function Dashboard() {
         {tab === "posts" && <ContentList />}
         {tab === "calendar" && <CalendarView />}
         {tab === "engage" && <Engagement />}
+        {tab === "research" && <CreatorAnalysis />}
         {tab === "analytics" && <AnalyticsDashboard />}
       </main>
     </div>

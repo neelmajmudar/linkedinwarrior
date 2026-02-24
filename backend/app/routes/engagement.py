@@ -96,10 +96,13 @@ async def search_posts(
         post_id = post.get("id", "")
         social_id = post.get("social_id", "")
         text = post.get("text", "")
+        share_url = post.get("share_url", "")
         author_name = ""
+        author_public_id = ""
         author = post.get("author")
         if author:
             author_name = author.get("name", "") or author.get("public_identifier", "")
+            author_public_id = author.get("public_identifier", "")
 
         # If we don't have social_id, try fetching post details
         if not social_id and post_id:
@@ -107,14 +110,19 @@ async def search_posts(
                 details = await get_post_details(account_id, post_id)
                 social_id = details.get("social_id", "")
                 text = text or details.get("text", "")
+                share_url = share_url or details.get("share_url", "")
                 if not author_name:
                     det_author = details.get("author", {})
                     author_name = det_author.get("name", "") or det_author.get("public_identifier", "")
+                    author_public_id = author_public_id or det_author.get("public_identifier", "")
             except Exception:
                 continue
 
         if not social_id or not text:
             continue
+
+        # Build author profile URL
+        post_author_url = f"https://www.linkedin.com/in/{author_public_id}" if author_public_id else ""
 
         # Generate comment via LangGraph agent
         try:
@@ -137,6 +145,8 @@ async def search_posts(
             "post_content": text[:2000],
             "comment_text": comment,
             "status": "pending",
+            "share_url": share_url,
+            "post_author_url": post_author_url,
         }).execute()
 
         comment_id = row.data[0]["id"] if row.data else ""
@@ -145,9 +155,11 @@ async def search_posts(
             "comment_id": comment_id,
             "post_social_id": social_id,
             "post_author": author_name,
-            "post_content": text[:500],
+            "post_content": text[:2000],
             "comment_text": comment,
             "status": "pending",
+            "share_url": share_url,
+            "post_author_url": post_author_url,
         })
 
     return {"posts": previews, "remaining_today": remaining}

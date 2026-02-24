@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
   approved: "badge-draft",
   scheduled: "badge-scheduled",
   published: "badge-published",
-  failed: "bg-[var(--destructive)]/12 text-[var(--destructive)]",
+  failed: "bg-red-50 text-red-600",
 };
 
 export default function ContentList() {
@@ -92,8 +92,8 @@ export default function ContentList() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" />
-        <span className="text-sm text-[var(--muted-foreground)]">Loading posts...</span>
+        <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+        <span className="text-sm text-gray-400">Loading posts...</span>
       </div>
     );
   }
@@ -101,11 +101,11 @@ export default function ContentList() {
   if (items.length === 0) {
     return (
       <div className="text-center py-16 animate-fade-in">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--muted)] mb-4">
-          <FileText className="h-7 w-7 text-[var(--muted-foreground)]" />
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gray-100 mb-4">
+          <FileText className="h-7 w-7 text-gray-400" />
         </div>
-        <p className="text-[var(--muted-foreground)] mb-1">No posts yet</p>
-        <p className="text-sm text-[var(--muted-foreground)] opacity-60">
+        <p className="text-gray-500 mb-1">No posts yet</p>
+        <p className="text-sm text-gray-400">
           Go to the Generate tab to create your first post.
         </p>
       </div>
@@ -114,7 +114,7 @@ export default function ContentList() {
 
   return (
     <div className="space-y-5">
-      <h2 className="text-xl font-bold tracking-tight">
+      <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
         My <span className="gradient-text">Posts</span>
       </h2>
 
@@ -134,12 +134,12 @@ export default function ContentList() {
                   {item.status}
                 </span>
                 {item.prompt && (
-                  <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[300px]">
+                  <span className="text-xs text-gray-400 truncate max-w-[300px]">
                     {item.prompt}
                   </span>
                 )}
               </div>
-              <span className="text-xs text-[var(--muted-foreground)]">
+              <span className="text-xs text-gray-400">
                 {format(new Date(item.created_at), "MMM d, yyyy h:mm a")}
               </span>
             </div>
@@ -164,7 +164,7 @@ export default function ContentList() {
                   </button>
                   <button
                     onClick={() => setEditingId(null)}
-                    className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-[var(--border)] rounded-lg"
+                    className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full"
                   >
                     <XCircle className="h-3 w-3" />
                     Cancel
@@ -172,7 +172,7 @@ export default function ContentList() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm whitespace-pre-wrap leading-relaxed text-[var(--card-foreground)]">
+              <p className="text-sm whitespace-pre-wrap leading-relaxed text-[#1a1a1a]">
                 {item.body.length > 500
                   ? item.body.slice(0, 500) + "..."
                   : item.body}
@@ -181,7 +181,7 @@ export default function ContentList() {
 
             {/* Scheduled info */}
             {item.scheduled_at && item.status === "scheduled" && (
-              <p className="text-xs text-[var(--warning)] flex items-center gap-1.5">
+              <p className="text-xs text-amber-600 flex items-center gap-1.5">
                 <Clock className="h-3 w-3" />
                 Scheduled for{" "}
                 {format(new Date(item.scheduled_at), "MMM d, yyyy h:mm a")}
@@ -190,7 +190,7 @@ export default function ContentList() {
 
             {/* Published info */}
             {item.published_at && (
-              <p className="text-xs text-[var(--success)] flex items-center gap-1.5">
+              <p className="text-xs text-green-600 flex items-center gap-1.5">
                 <CheckCircle2 className="h-3 w-3" />
                 Published{" "}
                 {format(new Date(item.published_at), "MMM d, yyyy h:mm a")}
@@ -205,7 +205,7 @@ export default function ContentList() {
                     setEditingId(item.id);
                     setEditBody(item.body);
                   }}
-                  className="btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 border border-[var(--border)] rounded-lg"
+                  className="btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 border border-gray-200 rounded-full"
                 >
                   <Edit3 className="h-3 w-3" />
                   Edit
@@ -227,7 +227,7 @@ export default function ContentList() {
                 <button
                   onClick={() => handleDelete(item.id)}
                   disabled={actionLoading === item.id}
-                  className="btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 border border-[var(--destructive)]/30 rounded-lg text-[var(--destructive)] hover:bg-[var(--destructive)]/10 disabled:opacity-50"
+                  className="btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 border border-red-200 rounded-full text-red-500 hover:bg-red-50 disabled:opacity-50"
                 >
                   <Trash2 className="h-3 w-3" />
                   Delete

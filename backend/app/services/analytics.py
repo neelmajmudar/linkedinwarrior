@@ -172,6 +172,38 @@ def get_post_performance(user_id: str, limit: int = 20) -> list[dict]:
     return unique
 
 
+def get_metric_trends(user_id: str, days: int = 30) -> list[dict]:
+    """Get daily aggregated metric trends from post_analytics snapshots."""
+    db = get_supabase()
+    result = db.table("post_analytics") \
+        .select("snapshot_date, reactions, comments, reposts, impressions") \
+        .eq("user_id", user_id) \
+        .order("snapshot_date", desc=False) \
+        .execute()
+
+    # Aggregate by snapshot_date
+    daily: dict[str, dict] = {}
+    for row in result.data or []:
+        d = row.get("snapshot_date", "")
+        if not d:
+            continue
+        if d not in daily:
+            daily[d] = {"date": d, "impressions": 0, "reactions": 0, "comments": 0, "reposts": 0, "post_count": 0}
+        daily[d]["impressions"] += row.get("impressions", 0)
+        daily[d]["reactions"] += row.get("reactions", 0)
+        daily[d]["comments"] += row.get("comments", 0)
+        daily[d]["reposts"] += row.get("reposts", 0)
+        daily[d]["post_count"] += 1
+
+    # Calculate engagement rate per day
+    sorted_days = sorted(daily.values(), key=lambda x: x["date"])
+    for day in sorted_days:
+        total_eng = day["reactions"] + day["comments"] + day["reposts"]
+        day["engagement_rate"] = round(total_eng / day["impressions"] * 100, 2) if day["impressions"] > 0 else 0.0
+
+    return sorted_days[-days:]
+
+
 def get_engagement_summary(user_id: str) -> dict:
     """Calculate engagement summary from stored post analytics."""
     posts = get_post_performance(user_id, limit=50)
