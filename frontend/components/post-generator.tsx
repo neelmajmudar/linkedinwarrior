@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { apiStream, apiPost, apiPatch } from "@/lib/api";
+import { apiStream, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import {
   Send,
   Loader2,
@@ -11,6 +11,8 @@ import {
   Clock,
   Rocket,
   Save,
+  ImagePlus,
+  X,
 } from "lucide-react";
 
 export default function PostGenerator() {
@@ -25,7 +27,11 @@ export default function PostGenerator() {
   const [showScheduler, setShowScheduler] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
@@ -120,6 +126,56 @@ export default function PostGenerator() {
       setError(err instanceof Error ? err.message : "Failed to schedule");
     }
     setScheduling(false);
+  }
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  async function handleImageUpload() {
+    if (!draftId || !imageFile) return;
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", imageFile);
+
+      const { getAuthHeaders } = await import("@/lib/api").then(() => ({
+        getAuthHeaders: async () => {
+          const { supabase } = await import("@/lib/supabase");
+          const { data: { session } } = await supabase.auth.getSession();
+          return { Authorization: `Bearer ${session?.access_token}` };
+        },
+      }));
+
+      const headers = await getAuthHeaders();
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${API_URL}/api/content/${draftId}/image`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Upload failed" }));
+        throw new Error(err.detail || "Upload failed");
+      }
+      setMessage("Image attached");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to upload image");
+    }
+    setUploadingImage(false);
+  }
+
+  function removeImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (draftId) {
+      apiDelete(`/api/content/${draftId}/image`).catch(() => {});
+    }
   }
 
   function handleCopy() {
@@ -256,6 +312,55 @@ export default function PostGenerator() {
                 Post Now
               </button>
             </div>
+          </div>
+
+          {/* Image upload */}
+          <div className="space-y-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            {imagePreview ? (
+              <div className="relative inline-block">
+                <img
+                  src={imagePreview}
+                  alt="Post image preview"
+                  className="max-h-40 rounded-lg border border-[var(--border)] object-cover"
+                />
+                <button
+                  onClick={removeImage}
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[var(--destructive)] text-white flex items-center justify-center hover:opacity-80"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                {draftId && imageFile && (
+                  <button
+                    onClick={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="absolute bottom-2 right-2 btn-primary px-2.5 py-1 text-xs flex items-center gap-1"
+                  >
+                    {uploadingImage ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Check className="h-3 w-3" />
+                    )}
+                    {uploadingImage ? "Uploading" : "Attach"}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isGenerating}
+                className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-dashed border-[var(--border)] rounded-lg disabled:opacity-50 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--primary)]/50 transition-colors"
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                Add Image
+              </button>
+            )}
           </div>
 
           {/* Schedule picker */}

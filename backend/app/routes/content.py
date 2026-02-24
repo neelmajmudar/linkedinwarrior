@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import StreamingResponse
 from app.auth import get_current_user
 from app.db import get_supabase
@@ -95,9 +95,82 @@ async def delete_content(content_id: str, user: dict = Depends(get_current_user)
     return {"status": "deleted"}
 
 
+@router.post("/{content_id}/image")
+async def upload_image(
+    content_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
+):
+    """Upload an image for a content item. Stores in Supabase Storage."""
+    db = get_supabase()
+
+    existing = db.table("content_items").select("id, status").eq("id", content_id).eq("user_id", user["id"]).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Content item not found")
+    if existing.data[0]["status"] == "published":
+        raise HTTPException(status_code=400, detail="Cannot add image to a published post")
+
+    # Read file and upload to Supabase Storage
+    contents = await file.read()
+    ext = (file.filename or "image.jpg").rsplit(".", 1)[-1]
+    storage_path = f"{user['id']}/{content_id}.{ext}"
+
+    try:
+        db.storage.from_("post-images").upload(
+            storage_path,
+            contents,
+            file_options={"content-type": file.content_type or "image/jpeg", "upsert": "true"},
+        )
+    except Exception:
+        # If bucket doesn't exist or upload fails, try removing first
+        try:
+            db.storage.from_("post-images").remove([storage_path])
+            db.storage.from_("post-images").upload(
+                storage_path,
+                contents,
+                file_options={"content-type": file.content_type or "image/jpeg"},
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload image: {e}")
+
+    image_url = db.storage.from_("post-images").get_public_url(storage_path)
+
+    db.table("content_items").update({
+        "image_url": image_url,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", content_id).execute()
+
+    return {"image_url": image_url}
+
+
+@router.delete("/{content_id}/image")
+async def remove_image(
+    content_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Remove the image from a content item."""
+    db = get_supabase()
+
+    existing = db.table("content_items").select("id, status, image_url").eq("id", content_id).eq("user_id", user["id"]).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Content item not found")
+    if existing.data[0]["status"] == "published":
+        raise HTTPException(status_code=400, detail="Cannot modify a published post")
+
+    db.table("content_items").update({
+        "image_url": None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", content_id).execute()
+
+    return {"status": "removed"}
+
+
 @router.post("/{content_id}/publish")
-async def publish_content(content_id: str, user: dict = Depends(get_current_user)):
-    """Publish a content item to LinkedIn immediately via Unipile."""
+async def publish_content(
+    content_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Publish a content item to LinkedIn immediately via Unipile, with optional image."""
     from app.services.unipile import publish_post
 
     db = get_supabase()
@@ -110,8 +183,32 @@ async def publish_content(content_id: str, user: dict = Depends(get_current_user
     if item["status"] == "published":
         raise HTTPException(status_code=400, detail="Already published")
 
+    # If the post has an image, download it and pass to publish
+    image_bytes = None
+    image_filename = "image.jpg"
+    image_content_type = "image/jpeg"
+    if item.get("image_url"):
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=15) as http:
+                img_resp = await http.get(item["image_url"])
+                img_resp.raise_for_status()
+                image_bytes = img_resp.content
+                ct = img_resp.headers.get("content-type", "image/jpeg")
+                image_content_type = ct
+                ext = ct.split("/")[-1].split(";")[0]
+                image_filename = f"post_image.{ext}"
+        except Exception:
+            pass  # Publish without image if download fails
+
     try:
-        linkedin_post_id = await publish_post(user["id"], item["body"])
+        linkedin_post_id = await publish_post(
+            user["id"],
+            item["body"],
+            image_bytes=image_bytes,
+            image_filename=image_filename,
+            image_content_type=image_content_type,
+        )
         now = datetime.now(timezone.utc).isoformat()
         db.table("content_items").update({
             "status": "published",

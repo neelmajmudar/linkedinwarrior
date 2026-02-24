@@ -32,8 +32,14 @@ async def handle_auth_callback(user_id: str, account_id: str) -> None:
     }).eq("id", user_id).execute()
 
 
-async def publish_post(user_id: str, post_text: str) -> str:
-    """Publish a text post to LinkedIn via Unipile.
+async def publish_post(
+    user_id: str,
+    post_text: str,
+    image_bytes: bytes | None = None,
+    image_filename: str = "image.jpg",
+    image_content_type: str = "image/jpeg",
+) -> str:
+    """Publish a post to LinkedIn via Unipile, optionally with an image.
 
     Returns the LinkedIn post ID.
     """
@@ -45,21 +51,36 @@ async def publish_post(user_id: str, post_text: str) -> str:
     if not account_id:
         raise ValueError("LinkedIn account not connected. Please connect via Unipile first.")
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            f"{settings.UNIPILE_DSN}/api/v1/posts",
-            headers={
-                "X-API-KEY": settings.UNIPILE_API_KEY,
-                "Content-Type": "application/json",
-            },
-            json={
-                "account_id": account_id,
-                "text": post_text,
-            },
-        )
+    async with httpx.AsyncClient(timeout=60) as client:
+        if image_bytes:
+            # Multipart form-data with image attachment
+            resp = await client.post(
+                f"{settings.UNIPILE_DSN}/api/v1/posts",
+                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+                data={
+                    "account_id": account_id,
+                    "text": post_text,
+                },
+                files={
+                    "attachments": (image_filename, image_bytes, image_content_type),
+                },
+            )
+        else:
+            # JSON text-only post
+            resp = await client.post(
+                f"{settings.UNIPILE_DSN}/api/v1/posts",
+                headers={
+                    "X-API-KEY": settings.UNIPILE_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "account_id": account_id,
+                    "text": post_text,
+                },
+            )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("id", "")
+        return data.get("post_id", data.get("id", ""))
 
 
 async def check_connection(user_id: str) -> dict:
