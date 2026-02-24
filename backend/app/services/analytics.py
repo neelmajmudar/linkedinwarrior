@@ -1,0 +1,170 @@
+"""Service for fetching LinkedIn analytics from Unipile and storing snapshots."""
+
+from datetime import date
+
+import httpx
+from app.config import settings
+from app.db import get_supabase
+
+
+async def fetch_follower_count(account_id: str, user_identifier: str) -> int | None:
+    """Fetch the current follower count from Unipile user profile."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{settings.UNIPILE_DSN}/api/v1/users/{user_identifier}",
+                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+                params={"account_id": account_id},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("followers_count")
+    except Exception:
+        return None
+
+
+async def fetch_user_posts(account_id: str, user_identifier: str, limit: int = 20) -> list[dict]:
+    """Fetch the user's LinkedIn posts with engagement metrics from Unipile."""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"{settings.UNIPILE_DSN}/api/v1/users/{user_identifier}/posts",
+                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+                params={"account_id": account_id, "limit": limit},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data if isinstance(data, list) else data.get("items", [])
+    except Exception:
+        return []
+
+
+async def take_snapshot(user_id: str) -> dict:
+    """Take a full analytics snapshot: follower count + post metrics."""
+    db = get_supabase()
+
+    # Get user's Unipile account and LinkedIn identifier
+    user_result = db.table("users").select(
+        "unipile_account_id, linkedin_username"
+    ).eq("id", user_id).execute()
+
+    if not user_result.data:
+        return {"error": "User not found"}
+
+    account_id = user_result.data[0].get("unipile_account_id")
+    linkedin_username = user_result.data[0].get("linkedin_username", "")
+
+    if not account_id:
+        return {"error": "LinkedIn not connected"}
+
+    today = date.today().isoformat()
+    result = {"snapshot_date": today}
+
+    # Follower snapshot
+    if linkedin_username:
+        followers = await fetch_follower_count(account_id, linkedin_username)
+        if followers is not None:
+            db.table("analytics_snapshots").upsert({
+                "user_id": user_id,
+                "followers_count": followers,
+                "snapshot_date": today,
+            }, on_conflict="user_id,snapshot_date").execute()
+            result["followers_count"] = followers
+
+    # Post metrics snapshot
+    if linkedin_username:
+        posts = await fetch_user_posts(account_id, linkedin_username, limit=30)
+        post_count = 0
+        for post in posts:
+            post_id = post.get("id", "")
+            social_id = post.get("social_id", "")
+            if not post_id:
+                continue
+
+            db.table("post_analytics").upsert({
+                "user_id": user_id,
+                "linkedin_post_id": post_id,
+                "social_id": social_id,
+                "post_text": (post.get("text") or "")[:500],
+                "reactions": post.get("reaction_counter", 0),
+                "comments": post.get("comment_counter", 0),
+                "reposts": post.get("repost_counter", 0),
+                "impressions": post.get("impressions_counter", 0),
+                "snapshot_date": today,
+            }, on_conflict="linkedin_post_id,snapshot_date").execute()
+            post_count += 1
+
+        result["posts_tracked"] = post_count
+
+    return result
+
+
+def get_follower_history(user_id: str, days: int = 30) -> list[dict]:
+    """Get follower count history for the past N days."""
+    db = get_supabase()
+    result = db.table("analytics_snapshots") \
+        .select("followers_count, snapshot_date") \
+        .eq("user_id", user_id) \
+        .order("snapshot_date", desc=False) \
+        .limit(days) \
+        .execute()
+    return result.data or []
+
+
+def get_post_performance(user_id: str, limit: int = 20) -> list[dict]:
+    """Get the latest post performance metrics."""
+    db = get_supabase()
+
+    # Get only the most recent snapshot for each post
+    result = db.table("post_analytics") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("snapshot_date", desc=True) \
+        .limit(limit * 2) \
+        .execute()
+
+    # Deduplicate by linkedin_post_id (keep latest snapshot)
+    seen = set()
+    unique = []
+    for row in result.data or []:
+        pid = row.get("linkedin_post_id")
+        if pid and pid not in seen:
+            seen.add(pid)
+            unique.append(row)
+        if len(unique) >= limit:
+            break
+
+    return unique
+
+
+def get_engagement_summary(user_id: str) -> dict:
+    """Calculate engagement summary from stored post analytics."""
+    posts = get_post_performance(user_id, limit=50)
+
+    if not posts:
+        return {
+            "total_posts": 0,
+            "total_reactions": 0,
+            "total_comments": 0,
+            "total_reposts": 0,
+            "total_impressions": 0,
+            "avg_engagement_rate": 0.0,
+        }
+
+    total_reactions = sum(p.get("reactions", 0) for p in posts)
+    total_comments = sum(p.get("comments", 0) for p in posts)
+    total_reposts = sum(p.get("reposts", 0) for p in posts)
+    total_impressions = sum(p.get("impressions", 0) for p in posts)
+
+    engagement_rate = 0.0
+    if total_impressions > 0:
+        engagement_rate = (total_reactions + total_comments + total_reposts) / total_impressions * 100
+
+    return {
+        "total_posts": len(posts),
+        "total_reactions": total_reactions,
+        "total_comments": total_comments,
+        "total_reposts": total_reposts,
+        "total_impressions": total_impressions,
+        "avg_engagement_rate": round(engagement_rate, 2),
+    }

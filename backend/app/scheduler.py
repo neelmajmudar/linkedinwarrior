@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.db import get_supabase
 from app.services.unipile import publish_post
+from app.services.analytics import take_snapshot
 
 scheduler = AsyncIOScheduler()
 
@@ -37,9 +38,23 @@ async def fire_scheduled_posts():
             print(f"[scheduler] Failed to publish post {post['id']}: {e}")
 
 
+async def daily_analytics_snapshot():
+    """Take an analytics snapshot for all users with connected LinkedIn accounts."""
+    db = get_supabase()
+    result = db.table("users").select("id").neq("unipile_account_id", None).execute()
+    users = result.data or []
+    for user in users:
+        try:
+            await take_snapshot(user["id"])
+            print(f"[scheduler] Analytics snapshot taken for user {user['id']}")
+        except Exception as e:
+            print(f"[scheduler] Analytics snapshot failed for user {user['id']}: {e}")
+
+
 def start_scheduler():
-    """Start the APScheduler with a 1-minute interval job."""
+    """Start the APScheduler with scheduled jobs."""
     scheduler.add_job(fire_scheduled_posts, "interval", minutes=1, id="fire_scheduled_posts", replace_existing=True)
+    scheduler.add_job(daily_analytics_snapshot, "cron", hour=6, minute=0, id="daily_analytics_snapshot", replace_existing=True)
     scheduler.start()
 
 

@@ -8,6 +8,7 @@ import PostGenerator from "./post-generator";
 import ContentList from "./content-list";
 import CalendarView from "./calendar-view";
 import Engagement from "./engagement";
+import AnalyticsDashboard from "./analytics-dashboard";
 import {
   Sword,
   PenTool,
@@ -16,11 +17,12 @@ import {
   LogOut,
   Linkedin,
   MessageSquare,
+  BarChart3,
   Zap,
   Loader2,
 } from "lucide-react";
 
-type Tab = "generate" | "posts" | "calendar" | "engage";
+type Tab = "generate" | "posts" | "calendar" | "engage" | "analytics";
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("generate");
@@ -122,6 +124,11 @@ export default function Dashboard() {
       label: "Engage",
       icon: <MessageSquare className="h-4 w-4" />,
     },
+    {
+      id: "analytics",
+      label: "Analytics",
+      icon: <BarChart3 className="h-4 w-4" />,
+    },
   ];
 
   return (
@@ -192,6 +199,7 @@ export default function Dashboard() {
         {tab === "posts" && <ContentList />}
         {tab === "calendar" && <CalendarView />}
         {tab === "engage" && <Engagement />}
+        {tab === "analytics" && <AnalyticsDashboard />}
       </main>
     </div>
   );
