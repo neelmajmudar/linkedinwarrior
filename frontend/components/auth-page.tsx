@@ -33,30 +33,30 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4">
+    <div className="flex items-center justify-center min-h-screen px-4 bg-gradient-to-b from-white via-warm-50 to-warm-100">
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo & Hero */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--primary)] mb-6 animate-pulse-glow">
-            <Sword className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-warm-500 mb-6">
+            <Sword className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-4xl font-bold tracking-tight gradient-text mb-3">
+          <h1 className="text-4xl tracking-tight text-[#1a1a1a] mb-3">
             LinkedInWarrior
           </h1>
-          <p className="text-[var(--muted-foreground)] text-base leading-relaxed max-w-sm mx-auto">
+          <p className="text-gray-500 text-base leading-relaxed max-w-sm mx-auto">
             AI-powered content that sounds like you.
             <br />
-            <span className="text-[var(--foreground)] font-medium">
+            <span className="text-[#1a1a1a] font-medium">
               Dominate your LinkedIn feed.
             </span>
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="glass-card p-8 gradient-border">
+        <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-100">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1.5">
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">
                 Email
               </label>
               <input
@@ -65,11 +65,11 @@ export default function AuthPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="input-field"
-                placeholder="warrior@example.com"
+                placeholder="you@example.com"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1.5">
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">
                 Password
               </label>
               <input
@@ -84,13 +84,13 @@ export default function AuthPage() {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--destructive)]/10 border border-[var(--destructive)]/20">
-                <p className="text-sm text-[var(--destructive)]">{error}</p>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-100">
+                <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
             {message && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--success)]/10 border border-[var(--success)]/20">
-                <p className="text-sm text-[var(--success)]">{message}</p>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 border border-green-100">
+                <p className="text-sm text-green-700">{message}</p>
               </div>
             )}
 
@@ -110,8 +110,8 @@ export default function AuthPage() {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-[var(--border)]">
-            <p className="text-center text-sm text-[var(--muted-foreground)]">
+          <div className="mt-6 pt-5 border-t border-gray-100">
+            <p className="text-center text-sm text-gray-500">
               {isSignUp
                 ? "Already have an account?"
                 : "Don\u2019t have an account?"}{" "}
@@ -121,7 +121,7 @@ export default function AuthPage() {
                   setError("");
                   setMessage("");
                 }}
-                className="text-[var(--accent)] hover:text-[var(--primary)] font-medium transition-colors"
+                className="text-warm-500 hover:text-warm-600 font-medium transition-colors"
               >
                 {isSignUp ? "Sign In" : "Sign Up"}
               </button>
@@ -130,7 +130,7 @@ export default function AuthPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-[var(--muted-foreground)]">
+        <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-400">
           <Linkedin className="h-3.5 w-3.5" />
           <span>Powered by AI &middot; Built for LinkedIn creators</span>
         </div>

@@ -100,17 +100,17 @@ export default function Onboarding({
   ];
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4">
+    <div className="flex items-center justify-center min-h-screen px-4 bg-gradient-to-b from-white via-warm-50 to-warm-100">
       <div className="w-full max-w-lg animate-fade-in">
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--primary)] mb-5 animate-pulse-glow">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-warm-500 mb-5">
             <Sword className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-3">
+          <h1 className="text-3xl tracking-tight text-[#1a1a1a] mb-3">
             Set up your <span className="gradient-text">voice profile</span>
           </h1>
-          <p className="text-[var(--muted-foreground)] text-base leading-relaxed max-w-md mx-auto">
+          <p className="text-gray-500 text-base leading-relaxed max-w-md mx-auto">
             We&apos;ll analyze your LinkedIn posts to learn how you write, then
             generate new content in your authentic voice.
           </p>
@@ -123,36 +123,36 @@ export default function Onboarding({
               <div
                 className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-all ${
                   step === "linkedin-url" && i === 0
-                    ? "bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30"
+                    ? "bg-warm-100 text-warm-600 border border-warm-300"
                     : step === "scraping"
                     ? i <= 1
-                      ? "bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30"
-                      : "bg-[var(--muted)] text-[var(--muted-foreground)] border border-transparent"
+                      ? "bg-warm-100 text-warm-600 border border-warm-300"
+                      : "bg-gray-100 text-gray-400 border border-transparent"
                     : step === "done"
-                    ? "bg-[var(--success)]/15 text-[var(--success)] border border-[var(--success)]/30"
-                    : "bg-[var(--muted)] text-[var(--muted-foreground)] border border-transparent"
+                    ? "bg-green-50 text-green-700 border border-green-200"
+                    : "bg-gray-100 text-gray-400 border border-transparent"
                 }`}
               >
                 {s.icon}
                 <span className="hidden sm:inline">{s.label}</span>
               </div>
               {i < pipelineSteps.length - 1 && (
-                <div className="w-4 h-px bg-[var(--border)]" />
+                <div className="w-4 h-px bg-gray-200" />
               )}
             </div>
           ))}
         </div>
 
         {/* Main card */}
-        <div className="glass-card p-8 gradient-border">
+        <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-100">
           {step === "linkedin-url" && (
             <form onSubmit={handleStartScrape} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1.5">
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">
                   LinkedIn Profile
                 </label>
                 <div className="relative">
-                  <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--primary)]" />
+                  <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-warm-500" />
                   <input
                     type="text"
                     value={username}
@@ -161,13 +161,13 @@ export default function Onboarding({
                     className="input-field pl-10"
                   />
                 </div>
-                <p className="text-xs text-[var(--muted-foreground)] mt-1.5">
+                <p className="text-xs text-gray-400 mt-1.5">
                   Enter your LinkedIn username or full profile URL
                 </p>
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 text-sm text-[var(--destructive)] px-3 py-2 rounded-lg bg-[var(--destructive)]/10 border border-[var(--destructive)]/20">
+                <div className="flex items-center gap-2 text-sm text-red-600 px-3 py-2 rounded-md bg-red-50 border border-red-100">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   {error}
                 </div>
@@ -186,22 +186,21 @@ export default function Onboarding({
           {step === "scraping" && (
             <div className="text-center space-y-5 py-4">
               <div className="relative inline-flex">
-                <Loader2 className="h-12 w-12 animate-spin text-[var(--primary)]" />
-                <div className="absolute inset-0 rounded-full animate-pulse-glow" />
+                <Loader2 className="h-12 w-12 animate-spin text-warm-500" />
               </div>
               <div>
-                <p className="text-[var(--foreground)] font-medium mb-1">
+                <p className="text-[#1a1a1a] font-medium mb-1">
                   {statusMessage}
                 </p>
-                <p className="text-xs text-[var(--muted-foreground)]">
+                <p className="text-xs text-gray-400">
                   This may take a minute or two...
                 </p>
               </div>
-              <div className="flex justify-center gap-1">
+              <div className="flex justify-center gap-1.5">
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
-                    className="w-1.5 h-1.5 rounded-full bg-[var(--primary)]"
+                    className="w-1.5 h-1.5 rounded-full bg-warm-400"
                     style={{
                       animation: `pulse-glow 1.4s ease-in-out ${i * 0.2}s infinite`,
                       opacity: 0.4 + i * 0.2,
@@ -214,14 +213,14 @@ export default function Onboarding({
 
           {step === "done" && (
             <div className="text-center space-y-5 py-4">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--success)]/15 border border-[var(--success)]/30">
-                <CheckCircle2 className="h-8 w-8 text-[var(--success)]" />
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-50 border border-green-200">
+                <CheckCircle2 className="h-8 w-8 text-green-600" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--foreground)] mb-1">
+                <p className="text-lg font-medium text-[#1a1a1a] mb-1">
                   Voice profile ready!
                 </p>
-                <p className="text-sm text-[var(--muted-foreground)]">
+                <p className="text-sm text-gray-500">
                   {statusMessage}
                 </p>
               </div>
