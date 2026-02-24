@@ -21,11 +21,11 @@ async def search_linkedin_posts(account_id: str, keywords: list[str], limit: int
                     "Content-Type": "application/json",
                 },
                 json={
-                    "account_id": account_id,
-                    "type": "POSTS",
-                    "query": keyword,
-                    "limit": limit,
+                    "api": "classic",
+                    "category": "posts",
+                    "keywords": keyword,
                 },
+                params={"account_id": account_id},
             )
             resp.raise_for_status()
             data = resp.json()

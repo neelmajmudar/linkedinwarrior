@@ -7,35 +7,72 @@ from app.config import settings
 from app.db import get_supabase
 
 
-async def fetch_follower_count(account_id: str, user_identifier: str) -> int | None:
-    """Fetch the current follower count from Unipile user profile."""
+async def get_own_profile(account_id: str) -> dict | None:
+    """Fetch the authenticated user's own profile from Unipile /users/me."""
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(
-                f"{settings.UNIPILE_DSN}/api/v1/users/{user_identifier}",
+                f"{settings.UNIPILE_DSN}/api/v1/users/me",
+                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+                params={"account_id": account_id},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"[analytics] Failed to fetch own profile: {e}")
+        return None
+
+
+async def _get_provider_id(account_id: str) -> str | None:
+    """Get the user's LinkedIn provider_id from /users/me."""
+    profile = await get_own_profile(account_id)
+    if not profile:
+        return None
+    return profile.get("provider_id")
+
+
+async def fetch_follower_count(account_id: str) -> int | None:
+    """Fetch the current follower count by looking up own profile via provider_id.
+
+    The /users/me endpoint doesn't return follower_count, so we fetch the
+    provider_id first, then query /users/{provider_id} which returns it.
+    """
+    provider_id = await _get_provider_id(account_id)
+    if not provider_id:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{settings.UNIPILE_DSN}/api/v1/users/{provider_id}",
                 headers={"X-API-KEY": settings.UNIPILE_API_KEY},
                 params={"account_id": account_id},
             )
             resp.raise_for_status()
             data = resp.json()
-            return data.get("followers_count")
-    except Exception:
+            return data.get("follower_count") or data.get("connections_count")
+    except Exception as e:
+        print(f"[analytics] Failed to fetch follower count: {e}")
         return None
 
 
-async def fetch_user_posts(account_id: str, user_identifier: str, limit: int = 20) -> list[dict]:
-    """Fetch the user's LinkedIn posts with engagement metrics from Unipile."""
+async def fetch_user_posts(account_id: str, limit: int = 20) -> list[dict]:
+    """Fetch the user's own LinkedIn posts with engagement metrics from Unipile."""
+    provider_id = await _get_provider_id(account_id)
+    if not provider_id:
+        return []
+
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(
-                f"{settings.UNIPILE_DSN}/api/v1/users/{user_identifier}/posts",
+                f"{settings.UNIPILE_DSN}/api/v1/users/{provider_id}/posts",
                 headers={"X-API-KEY": settings.UNIPILE_API_KEY},
                 params={"account_id": account_id, "limit": limit},
             )
             resp.raise_for_status()
             data = resp.json()
             return data if isinstance(data, list) else data.get("items", [])
-    except Exception:
+    except Exception as e:
+        print(f"[analytics] Failed to fetch posts: {e}")
         return []
 
 
@@ -61,40 +98,38 @@ async def take_snapshot(user_id: str) -> dict:
     result = {"snapshot_date": today}
 
     # Follower snapshot
-    if linkedin_username:
-        followers = await fetch_follower_count(account_id, linkedin_username)
-        if followers is not None:
-            db.table("analytics_snapshots").upsert({
-                "user_id": user_id,
-                "followers_count": followers,
-                "snapshot_date": today,
-            }, on_conflict="user_id,snapshot_date").execute()
-            result["followers_count"] = followers
+    followers = await fetch_follower_count(account_id)
+    if followers is not None:
+        db.table("analytics_snapshots").upsert({
+            "user_id": user_id,
+            "followers_count": followers,
+            "snapshot_date": today,
+        }, on_conflict="user_id,snapshot_date").execute()
+        result["followers_count"] = followers
 
     # Post metrics snapshot
-    if linkedin_username:
-        posts = await fetch_user_posts(account_id, linkedin_username, limit=30)
-        post_count = 0
-        for post in posts:
-            post_id = post.get("id", "")
-            social_id = post.get("social_id", "")
-            if not post_id:
-                continue
+    posts = await fetch_user_posts(account_id, limit=30)
+    post_count = 0
+    for post in posts:
+        post_id = post.get("id", "")
+        social_id = post.get("social_id", "")
+        if not post_id:
+            continue
 
-            db.table("post_analytics").upsert({
-                "user_id": user_id,
-                "linkedin_post_id": post_id,
-                "social_id": social_id,
-                "post_text": (post.get("text") or "")[:500],
-                "reactions": post.get("reaction_counter", 0),
-                "comments": post.get("comment_counter", 0),
-                "reposts": post.get("repost_counter", 0),
-                "impressions": post.get("impressions_counter", 0),
-                "snapshot_date": today,
-            }, on_conflict="linkedin_post_id,snapshot_date").execute()
-            post_count += 1
+        db.table("post_analytics").upsert({
+            "user_id": user_id,
+            "linkedin_post_id": post_id,
+            "social_id": social_id,
+            "post_text": (post.get("text") or "")[:500],
+            "reactions": post.get("reaction_counter", 0),
+            "comments": post.get("comment_counter", 0),
+            "reposts": post.get("repost_counter", 0),
+            "impressions": post.get("impressions_counter", 0),
+            "snapshot_date": today,
+        }, on_conflict="linkedin_post_id,snapshot_date").execute()
+        post_count += 1
 
-        result["posts_tracked"] = post_count
+    result["posts_tracked"] = post_count
 
     return result
 
