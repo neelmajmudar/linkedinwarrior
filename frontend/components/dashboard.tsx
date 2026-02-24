@@ -7,6 +7,7 @@ import Onboarding from "./onboarding";
 import PostGenerator from "./post-generator";
 import ContentList from "./content-list";
 import CalendarView from "./calendar-view";
+import Engagement from "./engagement";
 import {
   Sword,
   PenTool,
@@ -14,11 +15,12 @@ import {
   Calendar,
   LogOut,
   Linkedin,
+  MessageSquare,
   Zap,
   Loader2,
 } from "lucide-react";
 
-type Tab = "generate" | "posts" | "calendar";
+type Tab = "generate" | "posts" | "calendar" | "engage";
 
 export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("generate");
@@ -115,6 +117,11 @@ export default function Dashboard() {
       label: "Calendar",
       icon: <Calendar className="h-4 w-4" />,
     },
+    {
+      id: "engage",
+      label: "Engage",
+      icon: <MessageSquare className="h-4 w-4" />,
+    },
   ];
 
   return (
@@ -184,6 +191,7 @@ export default function Dashboard() {
         {tab === "generate" && <PostGenerator />}
         {tab === "posts" && <ContentList />}
         {tab === "calendar" && <CalendarView />}
+        {tab === "engage" && <Engagement />}
       </main>
     </div>
   );
