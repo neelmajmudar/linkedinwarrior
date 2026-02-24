@@ -97,11 +97,22 @@ export default function PostGenerator() {
     try {
       // Save latest edits first
       await apiPatch(`/api/content/${draftId}`, { body: draft });
+      // Auto-upload image if selected but not yet attached
+      if (imageFile) {
+        const uploaded = await uploadImage();
+        if (!uploaded) {
+          setPublishing(false);
+          return;
+        }
+      }
       await apiPost(`/api/content/${draftId}/publish`);
       setMessage("Published to LinkedIn!");
       setDraft("");
       setDraftId(null);
       setPrompt("");
+      setImageFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to publish");
     }
@@ -114,6 +125,14 @@ export default function PostGenerator() {
     setError("");
     try {
       await apiPatch(`/api/content/${draftId}`, { body: draft });
+      // Auto-upload image if selected but not yet attached
+      if (imageFile) {
+        const uploaded = await uploadImage();
+        if (!uploaded) {
+          setScheduling(false);
+          return;
+        }
+      }
       await apiPost(`/api/content/${draftId}/schedule`, {
         scheduled_at: new Date(scheduleDate).toISOString(),
       });
@@ -122,6 +141,9 @@ export default function PostGenerator() {
       setDraftId(null);
       setPrompt("");
       setShowScheduler(false);
+      setImageFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to schedule");
     }
@@ -135,38 +157,42 @@ export default function PostGenerator() {
     setImagePreview(URL.createObjectURL(file));
   }
 
-  async function handleImageUpload() {
-    if (!draftId || !imageFile) return;
+  async function uploadImage(targetDraftId?: string): Promise<boolean> {
+    const id = targetDraftId || draftId;
+    if (!id || !imageFile) return false;
     setUploadingImage(true);
     try {
       const formData = new FormData();
       formData.append("file", imageFile);
 
-      const { getAuthHeaders } = await import("@/lib/api").then(() => ({
-        getAuthHeaders: async () => {
-          const { supabase } = await import("@/lib/supabase");
-          const { data: { session } } = await supabase.auth.getSession();
-          return { Authorization: `Bearer ${session?.access_token}` };
-        },
-      }));
-
-      const headers = await getAuthHeaders();
+      const { supabase } = await import("@/lib/supabase");
+      const { data: { session } } = await supabase.auth.getSession();
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${API_URL}/api/content/${draftId}/image`, {
+      const res = await fetch(`${API_URL}/api/content/${id}/image`, {
         method: "POST",
-        headers,
+        headers: { Authorization: `Bearer ${session?.access_token}` },
         body: formData,
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Upload failed" }));
         throw new Error(err.detail || "Upload failed");
       }
-      setMessage("Image attached");
-      setTimeout(() => setMessage(""), 2000);
+      setUploadingImage(false);
+      return true;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to upload image");
+      setUploadingImage(false);
+      return false;
     }
-    setUploadingImage(false);
+  }
+
+  async function handleImageUpload() {
+    if (!draftId || !imageFile) return;
+    const ok = await uploadImage();
+    if (ok) {
+      setMessage("Image attached");
+      setTimeout(() => setMessage(""), 2000);
+    }
   }
 
   function removeImage() {

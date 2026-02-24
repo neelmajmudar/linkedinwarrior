@@ -198,8 +198,9 @@ async def publish_content(
                 image_content_type = ct
                 ext = ct.split("/")[-1].split(";")[0]
                 image_filename = f"post_image.{ext}"
-        except Exception:
-            pass  # Publish without image if download fails
+        except Exception as img_err:
+            print(f"[publish] Failed to download image for post {content_id}: {img_err}")
+            # Continue publishing without image
 
     try:
         linkedin_post_id = await publish_post(
