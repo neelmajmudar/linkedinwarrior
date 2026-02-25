@@ -1,6 +1,5 @@
 """Routes for the Creator Analysis and Competitor Research features."""
 
-import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.auth import get_current_user
 from app.db import get_supabase
 from app.services.creator_analysis import run_analysis_pipeline, run_competitor_pipeline
+from app.task_manager import create_task, TaskType
 
 router = APIRouter(prefix="/api/creator-analysis", tags=["creator-analysis"])
 
@@ -42,13 +42,16 @@ async def start_analysis(
 
     report_id = row.data[0]["id"]
 
-    asyncio.create_task(
-        run_analysis_pipeline(
+    create_task(
+        user_id=user["id"],
+        task_type=TaskType.research,
+        coro=run_analysis_pipeline(
             user_id=user["id"],
             report_id=report_id,
             niche=payload.niche,
             creator_urls=payload.creator_urls,
-        )
+        ),
+        meta={"report_id": report_id, "niche": payload.niche},
     )
 
     return {"report_id": report_id, "status": "pending"}
@@ -75,12 +78,15 @@ async def start_competitor_analysis(
 
     report_id = row.data[0]["id"]
 
-    asyncio.create_task(
-        run_competitor_pipeline(
+    create_task(
+        user_id=user["id"],
+        task_type=TaskType.research,
+        coro=run_competitor_pipeline(
             user_id=user["id"],
             report_id=report_id,
             competitors=payload.competitors,
-        )
+        ),
+        meta={"report_id": report_id, "niche": niche_label},
     )
 
     return {"report_id": report_id, "status": "pending"}

@@ -5,7 +5,8 @@ from fastapi.responses import StreamingResponse
 from app.auth import get_current_user
 from app.db import get_supabase
 from app.models import GenerateRequest, UpdateContentRequest, ScheduleRequest, ContentItem
-from app.agents.post_generator import generate_post_stream
+from app.agents.post_generator import generate_post_stream, generate_post
+from app.task_manager import create_task, TaskType
 
 router = APIRouter(prefix="/api/content", tags=["content"])
 
@@ -23,6 +24,37 @@ async def generate_content(
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/generate-async")
+async def generate_content_async(
+    payload: GenerateRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Start post generation as a background task. Returns a task_id for polling."""
+    task = create_task(
+        user_id=user["id"],
+        task_type=TaskType.generate,
+        coro=_run_generate(user["id"], payload.prompt),
+        meta={"prompt": payload.prompt},
+    )
+    return {"task_id": task.id, "status": "pending"}
+
+
+async def _run_generate(user_id: str, prompt: str) -> dict:
+    """Background coroutine that generates a post and returns the draft info."""
+    full_text = await generate_post(user_id, prompt)
+    db = get_supabase()
+    # Fetch the latest draft that was just saved by generate_post
+    result = db.table("content_items") \
+        .select("id, body, status, created_at") \
+        .eq("user_id", user_id) \
+        .eq("status", "draft") \
+        .order("created_at", desc=True) \
+        .limit(1) \
+        .execute()
+    draft = result.data[0] if result.data else None
+    return {"draft_id": draft["id"] if draft else None, "body": full_text, "prompt": prompt}
 
 
 @router.get("")

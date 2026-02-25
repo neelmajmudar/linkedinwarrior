@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { apiGet, apiPost } from "@/lib/api";
 import Onboarding from "./onboarding";
@@ -10,6 +10,7 @@ import CalendarView from "./calendar-view";
 import Engagement from "./engagement";
 import AnalyticsDashboard from "./analytics-dashboard";
 import CreatorAnalysis from "./creator-analysis";
+import { TaskNotificationProvider, useTaskNotifications } from "./task-notifications";
 import {
   Sword,
   PenTool,
@@ -27,10 +28,28 @@ import {
 type Tab = "generate" | "posts" | "calendar" | "engage" | "research" | "analytics";
 
 export default function Dashboard() {
+  return (
+    <TaskNotificationProvider>
+      <DashboardInner />
+    </TaskNotificationProvider>
+  );
+}
+
+function DashboardInner() {
   const [tab, setTab] = useState<Tab>("generate");
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const { setNavigateTo } = useTaskNotifications();
+
+  // Register tab navigation so notification toasts can switch tabs
+  const navigateToTab = useCallback((t: string) => {
+    setTab(t as Tab);
+  }, []);
+
+  useEffect(() => {
+    setNavigateTo(navigateToTab);
+  }, [setNavigateTo, navigateToTab]);
 
   useEffect(() => {
     checkOnboardingStatus();
@@ -212,3 +231,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
