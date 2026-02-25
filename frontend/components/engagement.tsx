@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import {
   Search,
@@ -57,6 +57,7 @@ export default function Engagement() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+  const [engageTaskId, setEngageTaskId] = useState<string | null>(null);
 
   function toggleExpand(id: string) {
     setExpandedPosts((prev) => {
@@ -66,6 +67,41 @@ export default function Engagement() {
       return next;
     });
   }
+
+  // Poll for engage task completion
+  useEffect(() => {
+    if (!engageTaskId) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiGet<{
+          task_id: string;
+          status: string;
+          result?: {
+            posts?: CommentPreview[];
+            remaining_today?: number;
+          };
+          error?: string;
+        }>(`/api/tasks/${engageTaskId}`);
+        if (data.status === "completed" && data.result) {
+          setPreviews(data.result.posts || []);
+          setRemaining(data.result.remaining_today ?? remaining);
+          if ((data.result.posts || []).length === 0) {
+            setMessage("No matching posts found. Try different topics.");
+            setTimeout(() => setMessage(""), 3000);
+          }
+          setSearching(false);
+          setEngageTaskId(null);
+        } else if (data.status === "failed") {
+          setError(data.error || "Search failed");
+          setSearching(false);
+          setEngageTaskId(null);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [engageTaskId, remaining]);
 
   useEffect(() => {
     loadTopics();
@@ -142,20 +178,15 @@ export default function Engagement() {
     setError("");
     setPreviews([]);
     try {
-      const data = await apiPost<{
-        posts: CommentPreview[];
-        remaining_today: number;
-      }>("/api/engagement/search", { limit: 5 });
-      setPreviews(data.posts || []);
-      setRemaining(data.remaining_today);
-      if (data.posts.length === 0) {
-        setMessage("No matching posts found. Try different topics.");
-        setTimeout(() => setMessage(""), 3000);
-      }
+      const data = await apiPost<{ task_id: string }>(
+        "/api/engagement/search-async",
+        { limit: 5 }
+      );
+      setEngageTaskId(data.task_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Search failed");
+      setSearching(false);
     }
-    setSearching(false);
   }
 
   async function approveComment(commentId: string, editedText?: string) {

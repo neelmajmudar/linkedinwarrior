@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { apiStream, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { useState, useRef, useEffect } from "react";
+import { apiPost, apiGet, apiPatch, apiDelete } from "@/lib/api";
 import {
   Send,
   Loader2,
@@ -30,8 +30,37 @@ export default function PostGenerator() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Poll for task completion when a generate task is in-flight
+  useEffect(() => {
+    if (!taskId) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiGet<{
+          task_id: string;
+          status: string;
+          result?: { draft_id?: string; body?: string; prompt?: string };
+          error?: string;
+        }>(`/api/tasks/${taskId}`);
+        if (data.status === "completed" && data.result) {
+          setDraft(data.result.body || "");
+          setDraftId(data.result.draft_id || null);
+          setIsGenerating(false);
+          setTaskId(null);
+        } else if (data.status === "failed") {
+          setError(data.error || "Generation failed");
+          setIsGenerating(false);
+          setTaskId(null);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [taskId]);
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
@@ -42,25 +71,11 @@ export default function PostGenerator() {
     setMessage("");
 
     try {
-      await apiStream(
-        "/api/content/generate",
-        { prompt },
-        (token) => {
-          setDraft((prev) => prev + token);
-        },
-        () => {
-          // no-op: we set isGenerating=false after fetching the draft ID below
-        }
+      const data = await apiPost<{ task_id: string }>(
+        "/api/content/generate-async",
+        { prompt }
       );
-      // After generation completes, fetch the latest draft to get its ID
-      const { apiGet: fetchGet } = await import("@/lib/api");
-      const list = await fetchGet<{ id: string }[]>(
-        "/api/content?status=draft"
-      );
-      if (list.length > 0) {
-        setDraftId(list[0].id);
-      }
-      setIsGenerating(false);
+      setTaskId(data.task_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Generation failed");
       setIsGenerating(false);

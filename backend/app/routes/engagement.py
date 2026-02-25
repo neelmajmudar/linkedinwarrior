@@ -17,6 +17,7 @@ from app.services.commenter import (
     DAILY_COMMENT_LIMIT,
 )
 from app.agents.comment_generator import generate_comment_for_post
+from app.task_manager import create_task, TaskType
 
 router = APIRouter(prefix="/api/engagement", tags=["engagement"])
 
@@ -163,6 +164,125 @@ async def search_posts(
         })
 
     return {"posts": previews, "remaining_today": remaining}
+
+
+@router.post("/search-async")
+async def search_posts_async(
+    payload: SearchPostsRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Start engagement search as a background task. Returns a task_id for polling."""
+    account_id = await get_user_account_id(user["id"])
+    if not account_id:
+        raise HTTPException(status_code=400, detail="LinkedIn account not connected")
+
+    db = get_supabase()
+    user_result = db.table("users").select("engagement_topics").eq("id", user["id"]).execute()
+    topics = (user_result.data[0].get("engagement_topics") or []) if user_result.data else []
+    if not topics:
+        raise HTTPException(status_code=400, detail="No engagement topics configured. Add topics first.")
+
+    remaining = get_remaining_daily_comments(user["id"])
+    if remaining <= 0:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily comment limit of {DAILY_COMMENT_LIMIT} reached. Try again tomorrow.",
+        )
+
+    task = create_task(
+        user_id=user["id"],
+        task_type=TaskType.engage,
+        coro=_run_engage_search(
+            user_id=user["id"],
+            account_id=account_id,
+            topics=topics,
+            limit=payload.limit,
+        ),
+        meta={"topics": topics, "limit": payload.limit},
+    )
+    return {"task_id": task.id, "status": "pending"}
+
+
+async def _run_engage_search(
+    user_id: str,
+    account_id: str,
+    topics: list[str],
+    limit: int,
+) -> dict:
+    """Background coroutine that searches posts and generates comments."""
+    db = get_supabase()
+    posts = await search_linkedin_posts(account_id, topics, limit=limit)
+    if not posts:
+        return {"posts": [], "remaining_today": get_remaining_daily_comments(user_id)}
+
+    previews = []
+    for post in posts:
+        post_id = post.get("id", "")
+        social_id = post.get("social_id", "")
+        text = post.get("text", "")
+        share_url = post.get("share_url", "")
+        author_name = ""
+        author_public_id = ""
+        author = post.get("author")
+        if author:
+            author_name = author.get("name", "") or author.get("public_identifier", "")
+            author_public_id = author.get("public_identifier", "")
+
+        if not social_id and post_id:
+            try:
+                details = await get_post_details(account_id, post_id)
+                social_id = details.get("social_id", "")
+                text = text or details.get("text", "")
+                share_url = share_url or details.get("share_url", "")
+                if not author_name:
+                    det_author = details.get("author", {})
+                    author_name = det_author.get("name", "") or det_author.get("public_identifier", "")
+                    author_public_id = author_public_id or det_author.get("public_identifier", "")
+            except Exception:
+                continue
+
+        if not social_id or not text:
+            continue
+
+        post_author_url = f"https://www.linkedin.com/in/{author_public_id}" if author_public_id else ""
+
+        try:
+            comment = await generate_comment_for_post(
+                user_id=user_id,
+                post_content=text,
+                post_author=author_name,
+            )
+        except Exception:
+            comment = ""
+
+        if not comment:
+            continue
+
+        row = db.table("auto_comments").insert({
+            "user_id": user_id,
+            "post_social_id": social_id,
+            "post_author": author_name,
+            "post_content": text[:2000],
+            "comment_text": comment,
+            "status": "pending",
+            "share_url": share_url,
+            "post_author_url": post_author_url,
+        }).execute()
+
+        comment_id = row.data[0]["id"] if row.data else ""
+
+        previews.append({
+            "comment_id": comment_id,
+            "post_social_id": social_id,
+            "post_author": author_name,
+            "post_content": text[:2000],
+            "comment_text": comment,
+            "status": "pending",
+            "share_url": share_url,
+            "post_author_url": post_author_url,
+        })
+
+    return {"posts": previews, "remaining_today": get_remaining_daily_comments(user_id)}
 
 
 @router.post("/approve")
