@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.db import get_supabase
 from app.services.unipile import publish_post
@@ -51,10 +51,36 @@ async def daily_analytics_snapshot():
             print(f"[scheduler] Analytics snapshot failed for user {user['id']}: {e}")
 
 
+async def purge_old_history():
+    """Delete engagement comments and research reports older than 7 days to control storage costs."""
+    db = get_supabase()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+
+    try:
+        db.table("auto_comments") \
+            .delete() \
+            .lt("created_at", cutoff) \
+            .neq("status", "pending") \
+            .execute()
+        print(f"[scheduler] Purged old auto_comments before {cutoff}")
+    except Exception as e:
+        print(f"[scheduler] Failed to purge auto_comments: {e}")
+
+    try:
+        db.table("creator_reports") \
+            .delete() \
+            .lt("created_at", cutoff) \
+            .execute()
+        print(f"[scheduler] Purged old creator_reports before {cutoff}")
+    except Exception as e:
+        print(f"[scheduler] Failed to purge creator_reports: {e}")
+
+
 def start_scheduler():
     """Start the APScheduler with scheduled jobs."""
     scheduler.add_job(fire_scheduled_posts, "interval", minutes=1, id="fire_scheduled_posts", replace_existing=True)
     scheduler.add_job(daily_analytics_snapshot, "cron", hour=6, minute=0, id="daily_analytics_snapshot", replace_existing=True)
+    scheduler.add_job(purge_old_history, "interval", hours=6, id="purge_old_history", replace_existing=True)
     scheduler.start()
 
 

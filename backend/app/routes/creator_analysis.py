@@ -9,6 +9,7 @@ from app.auth import get_current_user
 from app.db import get_supabase
 from app.services.creator_analysis import run_analysis_pipeline, run_competitor_pipeline
 from app.task_manager import create_task, TaskType
+from app.rate_limit import rate_limit
 
 router = APIRouter(prefix="/api/creator-analysis", tags=["creator-analysis"])
 
@@ -22,7 +23,7 @@ class RunCompetitorRequest(BaseModel):
     competitors: list[str] = Field(..., min_length=1)
 
 
-@router.post("/run")
+@router.post("/run", dependencies=[Depends(rate_limit("research", 5, 3600))])
 async def start_analysis(
     payload: RunAnalysisRequest,
     user: dict = Depends(get_current_user),
@@ -57,7 +58,7 @@ async def start_analysis(
     return {"report_id": report_id, "status": "pending"}
 
 
-@router.post("/competitor")
+@router.post("/competitor", dependencies=[Depends(rate_limit("research", 5, 3600))])
 async def start_competitor_analysis(
     payload: RunCompetitorRequest,
     user: dict = Depends(get_current_user),

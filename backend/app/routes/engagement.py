@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
 from app.db import get_supabase
+from app.rate_limit import rate_limit
 from app.services.commenter import (
     search_linkedin_posts,
     get_post_details,
@@ -62,7 +63,7 @@ async def save_topics(
     return {"topics": payload.topics}
 
 
-@router.post("/search")
+@router.post("/search", dependencies=[Depends(rate_limit("engage_search", 10, 3600))])
 async def search_posts(
     payload: SearchPostsRequest,
     user: dict = Depends(get_current_user),
@@ -166,7 +167,7 @@ async def search_posts(
     return {"posts": previews, "remaining_today": remaining}
 
 
-@router.post("/search-async")
+@router.post("/search-async", dependencies=[Depends(rate_limit("engage_search", 10, 3600))])
 async def search_posts_async(
     payload: SearchPostsRequest,
     user: dict = Depends(get_current_user),
