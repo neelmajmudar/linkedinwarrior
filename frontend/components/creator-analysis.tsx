@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/lib/api";
+import { useTaskNotifications } from "./task-notifications";
 import {
   Search,
   Loader2,
@@ -101,6 +102,30 @@ export default function CreatorAnalysis() {
   const [expandedCreators, setExpandedCreators] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [pollingId, setPollingId] = useState<string | null>(null);
+  const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
+
+  // On mount: restore from context if a research task is active or completed
+  useEffect(() => {
+    const active = getActiveTask("research");
+    if (!active) return;
+    const reportId = active.meta?.report_id as string | undefined;
+    if (active.status === "completed" || active.status === "failed") {
+      consumeTask("research");
+      // Load the completed report directly if we have the id
+      if (reportId) {
+        viewReport(reportId);
+      } else {
+        loadReports();
+      }
+    } else {
+      // Still running — restore pollingId so polling resumes
+      if (reportId) {
+        setPollingId(reportId);
+        setRunning(true);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     loadReports();
@@ -115,6 +140,7 @@ export default function CreatorAnalysis() {
           setPollingId(null);
           setRunning(false);
           setSelectedReport(report);
+          consumeTask("research");
           loadReports();
         }
       } catch {
@@ -122,7 +148,7 @@ export default function CreatorAnalysis() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [pollingId]);
+  }, [pollingId, consumeTask]);
 
   async function loadReports() {
     try {
@@ -144,6 +170,7 @@ export default function CreatorAnalysis() {
         creator_urls: creatorUrls.length > 0 ? creatorUrls : undefined,
       });
       setPollingId(data.report_id);
+      registerTask("research", data.report_id, { report_id: data.report_id });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start analysis");
       setRunning(false);
@@ -160,6 +187,7 @@ export default function CreatorAnalysis() {
         competitors,
       });
       setPollingId(data.report_id);
+      registerTask("research", data.report_id, { report_id: data.report_id });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start analysis");
       setRunning(false);
