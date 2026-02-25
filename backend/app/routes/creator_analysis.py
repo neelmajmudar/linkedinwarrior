@@ -126,3 +126,23 @@ async def get_report(
         raise HTTPException(status_code=404, detail="Report not found")
 
     return result.data[0]
+
+
+@router.delete("/reports/{report_id}")
+async def delete_report(
+    report_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Delete a creator analysis report."""
+    db = get_supabase()
+    result = db.table("creator_reports") \
+        .select("id") \
+        .eq("id", report_id) \
+        .eq("user_id", user["id"]) \
+        .execute()
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    db.table("creator_reports").delete().eq("id", report_id).execute()
+    return {"status": "deleted"}

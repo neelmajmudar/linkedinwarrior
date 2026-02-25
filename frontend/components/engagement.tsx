@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { useTaskNotifications } from "./task-notifications";
 import {
   Search,
@@ -255,6 +255,34 @@ export default function Engagement() {
     }
   }
 
+  async function approveHistoryComment(commentId: string) {
+    setPosting((p) => ({ ...p, [commentId]: true }));
+    setError("");
+    try {
+      await apiPost("/api/engagement/approve", { comment_id: commentId });
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === commentId ? { ...h, status: "posted" } : h
+        )
+      );
+      setRemaining((r) => Math.max(0, r - 1));
+      setMessage("Comment posted!");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to post");
+    }
+    setPosting((p) => ({ ...p, [commentId]: false }));
+  }
+
+  async function deleteComment(commentId: string) {
+    try {
+      await apiDelete(`/api/engagement/comments/${commentId}`);
+      setHistory((prev) => prev.filter((h) => h.id !== commentId));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
+    }
+  }
+
   const STATUS_BADGE: Record<string, string> = {
     pending: "bg-amber-50 text-amber-600 border-amber-200",
     posted: "bg-green-50 text-green-700 border-green-200",
@@ -350,6 +378,29 @@ export default function Engagement() {
                     )}
                   </div>
                   <p className="text-sm text-[#1a1a1a]">{item.comment_text}</p>
+                  <div className="flex items-center gap-2 pt-1">
+                    {item.status === "pending" && (
+                      <button
+                        onClick={() => approveHistoryComment(item.id)}
+                        disabled={posting[item.id] || remaining <= 0}
+                        className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
+                      >
+                        {posting[item.id] ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Send className="h-3 w-3" />
+                        )}
+                        Publish
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteComment(item.id)}
+                      className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full text-red-400 hover:text-red-600 hover:border-red-200 transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove
+                    </button>
+                  </div>
                 </div>
               );
             })

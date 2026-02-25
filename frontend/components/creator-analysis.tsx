@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiDelete } from "@/lib/api";
 import { useTaskNotifications } from "./task-notifications";
 import {
   Search,
@@ -17,6 +17,7 @@ import {
   Sparkles,
   Building2,
   Users,
+  Trash2,
 } from "lucide-react";
 
 type ResearchMode = "creators" | "competitors";
@@ -204,6 +205,15 @@ export default function CreatorAnalysis() {
       setError("Failed to load report");
     }
     setLoadingReport(false);
+  }
+
+  async function deleteReport(reportId: string) {
+    try {
+      await apiDelete(`/api/creator-analysis/reports/${reportId}`);
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete report");
+    }
   }
 
   function addUrl() {
@@ -683,21 +693,18 @@ export default function CreatorAnalysis() {
           {reports.map((r) => {
             const isComp = r.niche?.startsWith("Competitor:");
             return (
-              <button
-                key={r.id}
-                onClick={() => viewReport(r.id)}
-                disabled={loadingReport}
-                className="glass-card p-4 w-full text-left hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-center justify-between">
+              <div key={r.id} className="glass-card p-4 w-full flex items-center justify-between hover:shadow-sm transition-shadow">
+                <button
+                  onClick={() => viewReport(r.id)}
+                  disabled={loadingReport}
+                  className="flex-1 text-left"
+                >
                   <div className="flex items-center gap-2">
                     {isComp ? <Building2 className="h-4 w-4 text-blue-500" /> : <FileText className="h-4 w-4 text-warm-500" />}
                     <span className="text-sm font-medium text-[#1a1a1a]">{r.niche}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${STATUS_BADGE[r.status] || ""}`}>
                       {r.status}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-2">
                     {(r.creators_analyzed || []).length > 0 && (
                       <span className="text-xs text-gray-400">
                         {r.creators_analyzed.length} {isComp ? "orgs" : "creators"}
@@ -707,8 +714,15 @@ export default function CreatorAnalysis() {
                       {new Date(r.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                </div>
-              </button>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteReport(r.id); }}
+                  className="ml-3 p-1.5 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Delete report"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>

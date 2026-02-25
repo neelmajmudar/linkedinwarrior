@@ -385,6 +385,26 @@ async def get_history(
     }
 
 
+@router.delete("/comments/{comment_id}")
+async def delete_comment(
+    comment_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Delete a comment from the user's history."""
+    db = get_supabase()
+    result = db.table("auto_comments") \
+        .select("id") \
+        .eq("id", comment_id) \
+        .eq("user_id", user["id"]) \
+        .execute()
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    db.table("auto_comments").delete().eq("id", comment_id).execute()
+    return {"status": "deleted"}
+
+
 @router.get("/remaining")
 async def get_remaining(user: dict = Depends(get_current_user)):
     """Get the remaining daily comment count."""
