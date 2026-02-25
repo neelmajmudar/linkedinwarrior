@@ -23,7 +23,7 @@ class RunCompetitorRequest(BaseModel):
     competitors: list[str] = Field(..., min_length=1)
 
 
-@router.post("/run", dependencies=[Depends(rate_limit("research", 5, 3600))])
+@router.post("/run", dependencies=[Depends(rate_limit("research", 10, 3600))])
 async def start_analysis(
     payload: RunAnalysisRequest,
     user: dict = Depends(get_current_user),
@@ -58,7 +58,7 @@ async def start_analysis(
     return {"report_id": report_id, "status": "pending"}
 
 
-@router.post("/competitor", dependencies=[Depends(rate_limit("research", 5, 3600))])
+@router.post("/competitor", dependencies=[Depends(rate_limit("research", 10, 3600))])
 async def start_competitor_analysis(
     payload: RunCompetitorRequest,
     user: dict = Depends(get_current_user),

@@ -12,7 +12,7 @@ from app.rate_limit import rate_limit
 router = APIRouter(prefix="/api/content", tags=["content"])
 
 
-@router.post("/generate", dependencies=[Depends(rate_limit("content_generate", 10, 3600))])
+@router.post("/generate", dependencies=[Depends(rate_limit("content_generate", 20, 3600))])
 async def generate_content(
     payload: GenerateRequest,
     user: dict = Depends(get_current_user),
@@ -27,7 +27,7 @@ async def generate_content(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-@router.post("/generate-async", dependencies=[Depends(rate_limit("content_generate", 10, 3600))])
+@router.post("/generate-async", dependencies=[Depends(rate_limit("content_generate", 20, 3600))])
 async def generate_content_async(
     payload: GenerateRequest,
     user: dict = Depends(get_current_user),
