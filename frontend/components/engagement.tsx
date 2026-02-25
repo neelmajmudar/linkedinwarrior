@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { apiGet, apiPost } from "@/lib/api";
+import { useTaskNotifications } from "./task-notifications";
 import {
   Search,
   Loader2,
@@ -58,6 +59,7 @@ export default function Engagement() {
   const [error, setError] = useState("");
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
   const [engageTaskId, setEngageTaskId] = useState<string | null>(null);
+  const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
 
   function toggleExpand(id: string) {
     setExpandedPosts((prev) => {
@@ -67,6 +69,31 @@ export default function Engagement() {
       return next;
     });
   }
+
+  // On mount: restore from context if an engage task is active or completed
+  useEffect(() => {
+    const active = getActiveTask("engage");
+    if (!active) return;
+    if (active.status === "completed" && active.result) {
+      const r = active.result as { posts?: CommentPreview[]; remaining_today?: number };
+      setPreviews(r.posts || []);
+      if (r.remaining_today !== undefined) setRemaining(r.remaining_today);
+      if ((r.posts || []).length === 0) {
+        setMessage("No matching posts found. Try different topics.");
+        setTimeout(() => setMessage(""), 3000);
+      }
+      setSearching(false);
+      consumeTask("engage");
+    } else if (active.status === "failed") {
+      setError(active.error || "Search failed");
+      consumeTask("engage");
+    } else {
+      // Still running — restore the taskId so polling resumes
+      setEngageTaskId(active.task_id);
+      setSearching(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Poll for engage task completion
   useEffect(() => {
@@ -91,17 +118,19 @@ export default function Engagement() {
           }
           setSearching(false);
           setEngageTaskId(null);
+          consumeTask("engage");
         } else if (data.status === "failed") {
           setError(data.error || "Search failed");
           setSearching(false);
           setEngageTaskId(null);
+          consumeTask("engage");
         }
       } catch {
         // ignore polling errors
       }
     }, 4000);
     return () => clearInterval(interval);
-  }, [engageTaskId, remaining]);
+  }, [engageTaskId, remaining, consumeTask]);
 
   useEffect(() => {
     loadTopics();
@@ -183,6 +212,7 @@ export default function Engagement() {
         { limit: 5 }
       );
       setEngageTaskId(data.task_id);
+      registerTask("engage", data.task_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Search failed");
       setSearching(false);

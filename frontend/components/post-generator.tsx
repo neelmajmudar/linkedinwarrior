@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { apiPost, apiGet, apiPatch, apiDelete } from "@/lib/api";
+import { useTaskNotifications } from "./task-notifications";
 import {
   Send,
   Loader2,
@@ -33,6 +34,29 @@ export default function PostGenerator() {
   const [taskId, setTaskId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
+
+  // On mount: restore from context if a generate task is active or completed
+  useEffect(() => {
+    const active = getActiveTask("generate");
+    if (!active) return;
+    if (active.status === "completed" && active.result) {
+      const r = active.result as { draft_id?: string; body?: string; prompt?: string };
+      setDraft(r.body || "");
+      setDraftId(r.draft_id || null);
+      if (r.prompt) setPrompt(r.prompt);
+      setIsGenerating(false);
+      consumeTask("generate");
+    } else if (active.status === "failed") {
+      setError(active.error || "Generation failed");
+      consumeTask("generate");
+    } else {
+      // Still running — restore the taskId so polling resumes
+      setTaskId(active.task_id);
+      setIsGenerating(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Poll for task completion when a generate task is in-flight
   useEffect(() => {
@@ -50,17 +74,19 @@ export default function PostGenerator() {
           setDraftId(data.result.draft_id || null);
           setIsGenerating(false);
           setTaskId(null);
+          consumeTask("generate");
         } else if (data.status === "failed") {
           setError(data.error || "Generation failed");
           setIsGenerating(false);
           setTaskId(null);
+          consumeTask("generate");
         }
       } catch {
         // ignore polling errors
       }
     }, 3000);
     return () => clearInterval(interval);
-  }, [taskId]);
+  }, [taskId, consumeTask]);
 
   async function handleGenerate() {
     if (!prompt.trim()) return;
@@ -76,6 +102,7 @@ export default function PostGenerator() {
         { prompt }
       );
       setTaskId(data.task_id);
+      registerTask("generate", data.task_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Generation failed");
       setIsGenerating(false);

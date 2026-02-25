@@ -13,16 +13,27 @@ import { CheckCircle2, AlertCircle, X, PenTool, MessageSquare, Sparkles } from "
 
 // --- Types ---
 
-interface TaskNotification {
+export type TaskType = "generate" | "engage" | "research";
+export type TabId = "generate" | "engage" | "research";
+
+export interface TaskNotification {
   task_id: string;
-  task_type: "generate" | "engage" | "research";
+  task_type: TaskType;
   status: "completed" | "failed";
   error: string | null;
   meta: Record<string, unknown>;
+  result?: unknown;
   completed_at: string;
 }
 
-type TabId = "generate" | "engage" | "research";
+export interface ActiveTask {
+  task_id: string;
+  task_type: TaskType;
+  status: "pending" | "running" | "completed" | "failed";
+  result?: unknown;
+  error?: string | null;
+  meta?: Record<string, unknown>;
+}
 
 interface TaskNotificationContextValue {
   notifications: TaskNotification[];
@@ -30,6 +41,9 @@ interface TaskNotificationContextValue {
   dismissAll: () => void;
   navigateTo: ((tab: TabId) => void) | null;
   setNavigateTo: (fn: (tab: TabId) => void) => void;
+  registerTask: (taskType: TaskType, taskId: string, meta?: Record<string, unknown>) => void;
+  getActiveTask: (taskType: TaskType) => ActiveTask | null;
+  consumeTask: (taskType: TaskType) => ActiveTask | null;
 }
 
 // --- Context ---
@@ -40,6 +54,9 @@ const TaskNotificationContext = createContext<TaskNotificationContextValue>({
   dismissAll: () => {},
   navigateTo: null,
   setNavigateTo: () => {},
+  registerTask: () => {},
+  getActiveTask: () => null,
+  consumeTask: () => null,
 });
 
 export function useTaskNotifications() {
@@ -55,6 +72,33 @@ export function TaskNotificationProvider({ children }: { children: React.ReactNo
   const sinceRef = useRef<string>(new Date().toISOString());
   const seenRef = useRef<Set<string>>(new Set());
   const [navigateFn, setNavigateFn] = useState<((tab: TabId) => void) | null>(null);
+
+  // Persistent active-task map: survives child component unmount/remount
+  const activeTasksRef = useRef<Map<TaskType, ActiveTask>>(new Map());
+  // Counter to force re-render when activeTasksRef changes
+  const [, setTaskTick] = useState(0);
+  const bumpTick = useCallback(() => setTaskTick((t) => t + 1), []);
+
+  const registerTask = useCallback((taskType: TaskType, taskId: string, meta?: Record<string, unknown>) => {
+    activeTasksRef.current.set(taskType, {
+      task_id: taskId,
+      task_type: taskType,
+      status: "pending",
+      meta,
+    });
+    bumpTick();
+  }, [bumpTick]);
+
+  const getActiveTask = useCallback((taskType: TaskType): ActiveTask | null => {
+    return activeTasksRef.current.get(taskType) || null;
+  }, []);
+
+  const consumeTask = useCallback((taskType: TaskType): ActiveTask | null => {
+    const task = activeTasksRef.current.get(taskType) || null;
+    activeTasksRef.current.delete(taskType);
+    bumpTick();
+    return task;
+  }, [bumpTick]);
 
   const setNavigateTo = useCallback((fn: (tab: TabId) => void) => {
     setNavigateFn(() => fn);
@@ -78,11 +122,20 @@ export function TaskNotificationProvider({ children }: { children: React.ReactNo
           (t) => !seenRef.current.has(t.task_id)
         );
         if (newTasks.length > 0) {
+          let changed = false;
           for (const t of newTasks) {
             seenRef.current.add(t.task_id);
+            // Update activeTask entry if it matches
+            const active = activeTasksRef.current.get(t.task_type as TaskType);
+            if (active && active.task_id === t.task_id) {
+              active.status = t.status;
+              active.result = t.result;
+              active.error = t.error;
+              changed = true;
+            }
           }
+          if (changed) bumpTick();
           setNotifications((prev) => [...prev, ...newTasks]);
-          // Update since to latest completed_at
           const latest = newTasks.reduce(
             (max, t) => (t.completed_at > max ? t.completed_at : max),
             sinceRef.current
@@ -95,7 +148,7 @@ export function TaskNotificationProvider({ children }: { children: React.ReactNo
     }, POLL_INTERVAL);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [bumpTick]);
 
   // Auto-dismiss after 15 seconds
   useEffect(() => {
@@ -117,6 +170,9 @@ export function TaskNotificationProvider({ children }: { children: React.ReactNo
         dismissAll,
         navigateTo: navigateFn,
         setNavigateTo,
+        registerTask,
+        getActiveTask,
+        consumeTask,
       }}
     >
       {children}
