@@ -8,6 +8,7 @@ class ContentStatus(str, Enum):
     draft = "draft"
     approved = "approved"
     scheduled = "scheduled"
+    publishing = "publishing"
     published = "published"
     failed = "failed"
 
