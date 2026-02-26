@@ -1,18 +1,66 @@
+"""Scheduler module — dual-mode support for APScheduler (legacy) and Celery (scalable).
+
+When REDIS_URL is configured and reachable, tasks are delegated to Celery workers
+via the distributed task queue. Otherwise, the system falls back to the original
+in-process APScheduler for local development / single-server deployments.
+
+Production:
+  - Run Celery worker + beat separately (see celery_app.py docstring).
+  - The FastAPI process only enqueues tasks; it does NOT run the scheduler.
+
+Development / fallback:
+  - APScheduler runs inside the FastAPI process as before.
+"""
+
+import logging
 from datetime import datetime, timezone, timedelta
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from app.db import get_supabase
-from app.services.unipile import publish_post
-from app.services.analytics import take_snapshot
 
-scheduler = AsyncIOScheduler()
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Detect whether Celery + Redis is available
+# ---------------------------------------------------------------------------
+
+_USE_CELERY: bool = False
 
 
-async def fire_scheduled_posts():
+def _redis_available() -> bool:
+    """Quick connectivity check (non-blocking)."""
+    try:
+        import redis as _redis
+        from app.config import settings
+        r = _redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+        r.ping()
+        return True
+    except Exception:
+        return False
+
+
+def _init_mode() -> bool:
+    global _USE_CELERY
+    _USE_CELERY = _redis_available()
+    if _USE_CELERY:
+        logger.info("[scheduler] Redis detected — using Celery distributed task queue")
+    else:
+        logger.info("[scheduler] Redis not available — falling back to APScheduler")
+    return _USE_CELERY
+
+
+# ---------------------------------------------------------------------------
+# APScheduler fallback (original implementation, kept for dev convenience)
+# ---------------------------------------------------------------------------
+
+_apscheduler = None
+
+
+async def _fire_scheduled_posts_legacy():
     """Check for posts due to be published and publish them via Unipile."""
+    from app.db import get_supabase
+    from app.services.unipile import publish_post
+
     db = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Find all scheduled posts that are due
     result = db.table("content_items") \
         .select("id, user_id, body") \
         .eq("status", "scheduled") \
@@ -38,8 +86,11 @@ async def fire_scheduled_posts():
             print(f"[scheduler] Failed to publish post {post['id']}: {e}")
 
 
-async def daily_analytics_snapshot():
+async def _daily_analytics_snapshot_legacy():
     """Take an analytics snapshot for all users with connected LinkedIn accounts."""
+    from app.db import get_supabase
+    from app.services.analytics import take_snapshot
+
     db = get_supabase()
     result = db.table("users").select("id").neq("unipile_account_id", None).execute()
     users = result.data or []
@@ -51,8 +102,10 @@ async def daily_analytics_snapshot():
             print(f"[scheduler] Analytics snapshot failed for user {user['id']}: {e}")
 
 
-async def purge_old_history():
+async def _purge_old_history_legacy():
     """Delete engagement comments and research reports older than 7 days to control storage costs."""
+    from app.db import get_supabase
+
     db = get_supabase()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
@@ -76,15 +129,42 @@ async def purge_old_history():
         print(f"[scheduler] Failed to purge creator_reports: {e}")
 
 
+def _start_apscheduler():
+    global _apscheduler
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    _apscheduler = AsyncIOScheduler()
+    _apscheduler.add_job(_fire_scheduled_posts_legacy, "interval", minutes=1,
+                         id="fire_scheduled_posts", replace_existing=True)
+    _apscheduler.add_job(_daily_analytics_snapshot_legacy, "cron", hour=6, minute=0,
+                         id="daily_analytics_snapshot", replace_existing=True)
+    _apscheduler.add_job(_purge_old_history_legacy, "interval", hours=6,
+                         id="purge_old_history", replace_existing=True)
+    _apscheduler.start()
+
+
+def _stop_apscheduler():
+    global _apscheduler
+    if _apscheduler and _apscheduler.running:
+        _apscheduler.shutdown(wait=False)
+        _apscheduler = None
+
+
+# ---------------------------------------------------------------------------
+# Public API (called from main.py lifespan)
+# ---------------------------------------------------------------------------
+
 def start_scheduler():
-    """Start the APScheduler with scheduled jobs."""
-    scheduler.add_job(fire_scheduled_posts, "interval", minutes=1, id="fire_scheduled_posts", replace_existing=True)
-    scheduler.add_job(daily_analytics_snapshot, "cron", hour=6, minute=0, id="daily_analytics_snapshot", replace_existing=True)
-    scheduler.add_job(purge_old_history, "interval", hours=6, id="purge_old_history", replace_existing=True)
-    scheduler.start()
+    """Start the appropriate scheduler based on Redis availability."""
+    if _init_mode():
+        # Celery Beat + workers handle everything externally.
+        # Nothing to start inside FastAPI — just log confirmation.
+        logger.info("[scheduler] Celery mode active. Ensure worker & beat are running.")
+    else:
+        _start_apscheduler()
 
 
 def stop_scheduler():
     """Shut down the scheduler gracefully."""
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
+    if not _USE_CELERY:
+        _stop_apscheduler()

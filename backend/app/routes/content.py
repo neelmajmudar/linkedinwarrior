@@ -265,20 +265,46 @@ async def schedule_content(
     payload: ScheduleRequest,
     user: dict = Depends(get_current_user),
 ):
-    """Schedule a content item for future publishing."""
+    """Schedule a content item for future publishing.
+
+    If Celery is available and the post is due within 5 minutes, it is
+    immediately enqueued as a delayed task for precise timing. Otherwise
+    the periodic beat task will pick it up.
+    """
     db = get_supabase()
 
-    existing = db.table("content_items").select("id, status").eq("id", content_id).eq("user_id", user["id"]).execute()
+    existing = db.table("content_items").select("id, status, body, image_url").eq("id", content_id).eq("user_id", user["id"]).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Content item not found")
     if existing.data[0]["status"] == "published":
         raise HTTPException(status_code=400, detail="Already published")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    sched_dt = payload.scheduled_at.replace(tzinfo=timezone.utc) if payload.scheduled_at.tzinfo is None else payload.scheduled_at
+
     db.table("content_items").update({
         "status": "scheduled",
         "scheduled_at": payload.scheduled_at.isoformat(),
         "updated_at": now,
     }).eq("id", content_id).execute()
+
+    # If Celery is available and post is due soon, enqueue it immediately
+    # for precise timing instead of waiting for the next beat cycle
+    try:
+        from app.scheduler import _USE_CELERY
+        if _USE_CELERY:
+            delay = max(0, (sched_dt - now_dt).total_seconds())
+            if delay <= 300:  # due within 5 minutes
+                from app.tasks import publish_post_task
+                item = existing.data[0]
+                publish_post_task.apply_async(
+                    args=[content_id, user["id"], item["body"]],
+                    kwargs={"image_url": item.get("image_url")},
+                    countdown=delay,
+                    task_id=f"publish-{content_id}",
+                )
+    except Exception:
+        pass  # Celery enqueue is best-effort; beat will catch it regardless
 
     return {"status": "scheduled", "scheduled_at": payload.scheduled_at.isoformat()}

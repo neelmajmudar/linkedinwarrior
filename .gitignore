@@ -32,3 +32,6 @@ Thumbs.db
 # Python
 *.egg-info/
 *.egg
+
+# Celery
+celerybeat-schedule*
