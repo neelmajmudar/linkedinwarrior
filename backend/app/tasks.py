@@ -91,10 +91,13 @@ def publish_post_task(self, post_id: str, user_id: str, body: str,
     now_iso = datetime.now(timezone.utc).isoformat()
 
     # Mark as publishing (prevents double-enqueue)
-    db.table("content_items").update({
-        "status": "publishing",
-        "updated_at": now_iso,
-    }).eq("id", post_id).eq("status", "scheduled").execute()
+    # On first attempt, transition from 'scheduled' to 'publishing'.
+    # On retries, the post is already 'publishing' — skip the update.
+    if self.request.retries == 0:
+        db.table("content_items").update({
+            "status": "publishing",
+            "updated_at": now_iso,
+        }).eq("id", post_id).eq("status", "scheduled").execute()
 
     try:
         # Resolve the user's Unipile account
@@ -128,11 +131,10 @@ def publish_post_task(self, post_id: str, user_id: str, body: str,
             }).eq("id", post_id).execute()
             raise
 
-        # Revert to scheduled so the retry picks it up cleanly
-        db.table("content_items").update({
-            "status": "scheduled",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", post_id).execute()
+        # Keep status as 'publishing' — Celery's own retry mechanism
+        # will re-run this task. We do NOT revert to 'scheduled' because
+        # that would cause enqueue_due_posts to create a duplicate task,
+        # resetting the retry counter and creating an infinite loop.
 
         # Exponential backoff: 60s, 120s, 240s
         raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
