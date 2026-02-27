@@ -1,10 +1,10 @@
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
 from app.auth import get_current_user
 from app.db import get_supabase
-from app.models import GenerateRequest, UpdateContentRequest, ScheduleRequest, ContentItem
+from app.models import GenerateRequest, UpdateContentRequest, ScheduleRequest, ContentItem, PaginatedResponse
 from app.agents.post_generator import generate_post_stream, generate_post
 from app.task_manager import create_task, TaskType
 from app.rate_limit import rate_limit
@@ -61,15 +61,34 @@ async def _run_generate(user_id: str, prompt: str) -> dict:
 @router.get("")
 async def list_content(
     status: str | None = None,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
 ):
     """List all content items for the current user, optionally filtered by status."""
     db = get_supabase()
-    query = db.table("content_items").select("*").eq("user_id", user["id"]).order("created_at", desc=True)
+    offset = (page - 1) * page_size
+
+    # Count query (separate from data query to avoid chaining issues)
+    count_query = db.table("content_items").select("id", count="exact").eq("user_id", user["id"])
     if status:
-        query = query.eq("status", status)
-    result = query.execute()
-    return result.data
+        count_query = count_query.eq("status", status)
+    count_result = count_query.execute()
+    total = count_result.count or 0
+
+    # Data query
+    data_query = db.table("content_items").select("*").eq("user_id", user["id"]).order("created_at", desc=True)
+    if status:
+        data_query = data_query.eq("status", status)
+    data_result = data_query.range(offset, offset + page_size - 1).execute()
+
+    return {
+        "items": data_result.data or [],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (offset + page_size) < total,
+    }
 
 
 @router.get("/{content_id}")

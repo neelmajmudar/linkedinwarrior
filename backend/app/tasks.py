@@ -27,9 +27,20 @@ def _get_db() -> Client:
 
 def _publish_via_unipile(account_id: str, post_text: str,
                           image_url: str | None = None) -> str:
-    """Synchronous Unipile publish — called inside Celery worker processes."""
+    """Synchronous Unipile publish — called inside Celery worker processes.
+
+    Unipile's POST /api/v1/posts requires multipart/form-data.
+    Fields are sent via the ``files`` parameter as (None, value) tuples
+    for plain text fields, and (filename, bytes, content_type) for attachments.
+    """
     with httpx.Client(timeout=60) as client:
-        # If image, download it first then send multipart
+        # Base multipart fields
+        form_fields: list[tuple[str, tuple]] = [
+            ("account_id", (None, account_id)),
+            ("text", (None, post_text)),
+        ]
+
+        # If image, download it first then attach
         if image_url:
             try:
                 img_resp = client.get(image_url, timeout=15)
@@ -37,32 +48,22 @@ def _publish_via_unipile(account_id: str, post_text: str,
                 image_bytes = img_resp.content
                 ct = img_resp.headers.get("content-type", "image/jpeg")
                 ext = ct.split("/")[-1].split(";")[0]
-
-                resp = client.post(
-                    f"{settings.UNIPILE_DSN}/api/v1/posts",
-                    headers={"X-API-KEY": settings.UNIPILE_API_KEY},
-                    data={"account_id": account_id, "text": post_text},
-                    files={"attachments": (f"post_image.{ext}", image_bytes, ct)},
+                form_fields.append(
+                    ("attachments", (f"post_image.{ext}", image_bytes, ct))
                 )
             except Exception as img_err:
                 logger.warning("Image download failed, publishing without image: %s", img_err)
-                resp = client.post(
-                    f"{settings.UNIPILE_DSN}/api/v1/posts",
-                    headers={
-                        "X-API-KEY": settings.UNIPILE_API_KEY,
-                        "Content-Type": "application/json",
-                    },
-                    json={"account_id": account_id, "text": post_text},
-                )
-        else:
-            resp = client.post(
-                f"{settings.UNIPILE_DSN}/api/v1/posts",
-                headers={
-                    "X-API-KEY": settings.UNIPILE_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                json={"account_id": account_id, "text": post_text},
-            )
+
+        resp = client.post(
+            f"{settings.UNIPILE_DSN}/api/v1/posts",
+            headers={
+                "X-API-KEY": settings.UNIPILE_API_KEY,
+                "accept": "application/json",
+            },
+            files=form_fields,
+        )
+        if resp.status_code >= 400:
+            logger.error("[unipile] %s %s — body: %s", resp.status_code, resp.reason_phrase, resp.text[:500])
         resp.raise_for_status()
         data = resp.json()
         return data.get("post_id", data.get("id", ""))

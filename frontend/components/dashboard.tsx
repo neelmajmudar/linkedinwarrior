@@ -11,6 +11,7 @@ import Engagement from "./engagement";
 import AnalyticsDashboard from "./analytics-dashboard";
 import CreatorAnalysis from "./creator-analysis";
 import { TaskNotificationProvider, useTaskNotifications } from "./task-notifications";
+import Link from "next/link";
 import {
   Sword,
   PenTool,
@@ -161,14 +162,14 @@ function DashboardInner() {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
             <Sword className="h-4 w-4 text-white" />
           </div>
           <span className="text-lg tracking-tight text-[#1a1a1a]">
             LinkedInWarrior
           </span>
-        </div>
+        </Link>
         <div className="flex items-center gap-4">
           {linkedinConnected ? (
             <div className="flex items-center gap-1.5 text-sm">

@@ -1,0 +1,89 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linkedinwarrior-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+    depends_on:
+      - redis
+    networks:
+      - linkedinwarrior-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import httpx; httpx.get('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: linkedinwarrior-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - linkedinwarrior-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linkedinwarrior-celery
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - linkedinwarrior-network
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q default,publishing,analytics
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: linkedinwarrior-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+    depends_on:
+      - redis
+      - celery-worker
+    networks:
+      - linkedinwarrior-network
+    command: celery -A app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+
+networks:
+  linkedinwarrior-network:
+    driver: bridge
+
+volumes:
+  redis-data:

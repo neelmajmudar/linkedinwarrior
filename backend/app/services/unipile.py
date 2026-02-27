@@ -52,32 +52,27 @@ async def publish_post(
         raise ValueError("LinkedIn account not connected. Please connect via Unipile first.")
 
     async with httpx.AsyncClient(timeout=60) as client:
+        # Unipile requires multipart/form-data for POST /api/v1/posts.
+        # Plain text fields use (None, value) tuples; attachments use
+        # (filename, bytes, content_type).
+        form_fields: list[tuple[str, tuple]] = [
+            ("account_id", (None, account_id)),
+            ("text", (None, post_text)),
+        ]
+
         if image_bytes:
-            # Multipart form-data with image attachment
-            resp = await client.post(
-                f"{settings.UNIPILE_DSN}/api/v1/posts",
-                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
-                data={
-                    "account_id": account_id,
-                    "text": post_text,
-                },
-                files={
-                    "attachments": (image_filename, image_bytes, image_content_type),
-                },
+            form_fields.append(
+                ("attachments", (image_filename, image_bytes, image_content_type))
             )
-        else:
-            # JSON text-only post
-            resp = await client.post(
-                f"{settings.UNIPILE_DSN}/api/v1/posts",
-                headers={
-                    "X-API-KEY": settings.UNIPILE_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "account_id": account_id,
-                    "text": post_text,
-                },
-            )
+
+        resp = await client.post(
+            f"{settings.UNIPILE_DSN}/api/v1/posts",
+            headers={
+                "X-API-KEY": settings.UNIPILE_API_KEY,
+                "accept": "application/json",
+            },
+            files=form_fields,
+        )
         resp.raise_for_status()
         data = resp.json()
         return data.get("post_id", data.get("id", ""))

@@ -146,16 +146,33 @@ def get_follower_history(user_id: str, days: int = 30) -> list[dict]:
     return result.data or []
 
 
-def get_post_performance(user_id: str, limit: int = 20) -> list[dict]:
-    """Get the latest post performance metrics."""
+def get_post_performance_count(user_id: str) -> int:
+    """Return the count of distinct posts with analytics for a user."""
+    db = get_supabase()
+    result = db.table("post_analytics") \
+        .select("linkedin_post_id") \
+        .eq("user_id", user_id) \
+        .execute()
+    seen = set()
+    for row in result.data or []:
+        pid = row.get("linkedin_post_id")
+        if pid:
+            seen.add(pid)
+    return len(seen)
+
+
+def get_post_performance(user_id: str, limit: int = 20, offset: int = 0) -> list[dict]:
+    """Get the latest post performance metrics with pagination."""
     db = get_supabase()
 
-    # Get only the most recent snapshot for each post
+    # Fetch enough rows to deduplicate and satisfy the page window.
+    # We over-fetch relative to the farthest row we might need.
+    fetch_limit = (offset + limit) * 2
     result = db.table("post_analytics") \
         .select("*") \
         .eq("user_id", user_id) \
         .order("snapshot_date", desc=True) \
-        .limit(limit * 2) \
+        .limit(fetch_limit) \
         .execute()
 
     # Deduplicate by linkedin_post_id (keep latest snapshot)
@@ -166,10 +183,8 @@ def get_post_performance(user_id: str, limit: int = 20) -> list[dict]:
         if pid and pid not in seen:
             seen.add(pid)
             unique.append(row)
-        if len(unique) >= limit:
-            break
 
-    return unique
+    return unique[offset: offset + limit]
 
 
 def get_metric_trends(user_id: str, days: int = 30) -> list[dict]:

@@ -111,6 +111,28 @@ def list_tasks(user_id: str, pending_only: bool = False) -> list[dict]:
     return [t.to_dict() for t in tasks]
 
 
+def list_tasks_paginated(
+    user_id: str,
+    pending_only: bool = False,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """Return a paginated slice of tasks for a user."""
+    all_tasks = _get_user_tasks(user_id)
+    if pending_only:
+        all_tasks = [t for t in all_tasks if t.status in (TaskStatus.pending, TaskStatus.running)]
+    total = len(all_tasks)
+    offset = (page - 1) * page_size
+    page_tasks = all_tasks[offset: offset + page_size]
+    return {
+        "tasks": [t.to_dict() for t in page_tasks],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (offset + page_size) < total,
+    }
+
+
 def get_completed_unseen(user_id: str, since: str | None = None) -> list[dict]:
     """Return tasks completed after *since* (ISO timestamp) — for notification polling."""
     tasks = _get_user_tasks(user_id)

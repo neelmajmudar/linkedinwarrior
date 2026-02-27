@@ -1,46 +1,77 @@
-"use client";
+import dynamic from "next/dynamic";
+import type { Metadata } from "next";
+import Footer from "@/components/landing/footer";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import AuthPage from "@/components/auth-page";
-import Dashboard from "@/components/dashboard";
-import type { Session } from "@supabase/supabase-js";
+export const metadata: Metadata = {
+  title: "LinkedInWarrior — AI-Powered LinkedIn Growth Engine",
+  description:
+    "Generate authentic LinkedIn posts in your voice, auto-engage with your audience, schedule content, and track analytics — all powered by AI.",
+  keywords:
+    "LinkedIn AI, AI post generator, LinkedIn growth, content automation, LinkedIn scheduling, AI ghostwriter, personal branding, LinkedIn engagement",
+  openGraph: {
+    title: "LinkedInWarrior — AI-Powered LinkedIn Growth Engine",
+    description:
+      "Generate authentic LinkedIn posts, auto-engage, and grow your network with AI that sounds like you.",
+    type: "website",
+  },
+};
 
-export default function Home() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+const HeroSection = dynamic(() => import("@/components/landing/hero-section"), {
+  loading: () => (
+    <section className="w-full min-h-[90vh] bg-white flex items-center justify-center">
+      <div className="skeleton h-8 w-64 rounded-full" />
+    </section>
+  ),
+});
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+const HowItWorks = dynamic(() => import("@/components/landing/how-it-works"), {
+  loading: () => <div className="w-full h-[400px] bg-white" />,
+});
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+const FeatureCards = dynamic(() => import("@/components/landing/feature-cards"), {
+  loading: () => <div className="w-full h-[600px] bg-white" />,
+});
 
-    return () => subscription.unsubscribe();
-  }, []);
+const StatsSection = dynamic(() => import("@/components/landing/stats-section"), {
+  loading: () => <div className="w-full h-[400px] bg-white" />,
+});
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="w-10 h-10 rounded-full bg-warm-500 flex items-center justify-center animate-pulse-glow">
-            <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
+const CTASection = dynamic(() => import("@/components/landing/cta-section"), {
+  loading: () => <div className="w-full h-[300px]" />,
+});
+
+export default function HomePage() {
+  return (
+    <main className="min-h-screen w-full bg-white">
+      <HeroSection />
+
+      <section id="how-it-works">
+        <HowItWorks />
+      </section>
+
+      <section
+        id="features"
+        className="w-full px-8 md:px-16 lg:px-24 pt-8 md:pt-16 pb-24 md:pb-32 bg-white"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col gap-1 md:gap-3 mb-10 md:mb-16">
+            <h2 className="font-normal text-3xl md:text-5xl tracking-[-0.02em] text-[#1a1a1a] text-center">
+              Everything You Need to Win on LinkedIn
+            </h2>
+            <p className="text-center text-base md:text-lg text-gray-500 mx-auto max-w-[540px]">
+              From AI-powered post generation to automated engagement — one
+              platform, zero compromises.
+            </p>
           </div>
-          <div className="skeleton h-2 w-24 rounded-full" />
+          <FeatureCards />
         </div>
-      </div>
-    );
-  }
+      </section>
 
-  if (!session) {
-    return <AuthPage />;
-  }
+      <StatsSection />
+      <CTASection />
 
-  return <Dashboard />;
+      {/* Footer is static — rendered as RSC, no JS shipped */}
+      <Footer />
+    </main>
+  );
 }
