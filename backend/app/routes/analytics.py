@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from app.auth import get_current_user
 from app.db import get_supabase
 from app.services.analytics import (
     take_snapshot,
     get_follower_history,
     get_post_performance,
+    get_post_performance_count,
     get_engagement_summary,
     get_metric_trends,
 )
@@ -51,12 +52,21 @@ async def get_followers(
 
 @router.get("/posts")
 async def get_posts_analytics(
-    limit: int = 20,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
 ):
     """Get per-post performance metrics."""
-    posts = get_post_performance(user["id"], limit=limit)
-    return {"posts": posts}
+    offset = (page - 1) * page_size
+    posts = get_post_performance(user["id"], limit=page_size, offset=offset)
+    total = get_post_performance_count(user["id"])
+    return {
+        "posts": posts,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (offset + page_size) < total,
+    }
 
 
 @router.post("/refresh")

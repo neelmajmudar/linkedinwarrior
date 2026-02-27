@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
@@ -363,24 +363,35 @@ async def skip_comment(
 @router.get("/history")
 async def get_history(
     status: Optional[str] = None,
-    limit: int = 50,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
 ):
     """List past auto-comments with optional status filter."""
     db = get_supabase()
-    query = db.table("auto_comments") \
+    offset = (page - 1) * page_size
+
+    count_query = db.table("auto_comments").select("id", count="exact").eq("user_id", user["id"])
+    if status:
+        count_query = count_query.eq("status", status)
+    count_result = count_query.execute()
+    total = count_result.count or 0
+
+    data_query = db.table("auto_comments") \
         .select("*") \
         .eq("user_id", user["id"]) \
-        .order("created_at", desc=True) \
-        .limit(limit)
-
+        .order("created_at", desc=True)
     if status:
-        query = query.eq("status", status)
+        data_query = data_query.eq("status", status)
+    data_result = data_query.range(offset, offset + page_size - 1).execute()
 
-    result = query.execute()
     remaining = get_remaining_daily_comments(user["id"])
     return {
-        "comments": result.data or [],
+        "comments": data_result.data or [],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (offset + page_size) < total,
         "remaining_today": remaining,
         "daily_limit": DAILY_COMMENT_LIMIT,
     }

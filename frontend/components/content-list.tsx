@@ -12,6 +12,8 @@ import {
   XCircle,
   FileText,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 interface ContentItem {
@@ -25,6 +27,14 @@ interface ContentItem {
   created_at: string;
 }
 
+interface PaginatedResponse {
+  items: ContentItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   draft: "badge-draft",
   approved: "badge-draft",
@@ -33,22 +43,33 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-50 text-red-600",
 };
 
+const PAGE_SIZE = 10;
+
 export default function ContentList() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
-    loadItems();
-  }, []);
+    loadItems(page);
+  }, [page]);
 
-  async function loadItems() {
+  async function loadItems(p: number) {
     setLoading(true);
     try {
-      const data = await apiGet<ContentItem[]>("/api/content");
-      setItems(data);
+      const data = await apiGet<PaginatedResponse>(
+        `/api/content?page=${p}&page_size=${PAGE_SIZE}`
+      );
+      setItems(data.items ?? []);
+      setTotal(data.total ?? 0);
+      setHasNext(data.has_next ?? false);
     } catch {
       // ignore
     }
@@ -70,7 +91,7 @@ export default function ContentList() {
     setActionLoading(id);
     try {
       await apiPost(`/api/content/${id}/publish`);
-      await loadItems();
+      await loadItems(page);
     } catch {
       // ignore
     }
@@ -82,7 +103,7 @@ export default function ContentList() {
     try {
       await apiPatch(`/api/content/${id}`, { body: editBody });
       setEditingId(null);
-      await loadItems();
+      await loadItems(page);
     } catch {
       // ignore
     }
@@ -114,9 +135,12 @@ export default function ContentList() {
 
   return (
     <div className="space-y-5">
-      <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-        My <span className="gradient-text">Posts</span>
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
+          My <span className="gradient-text">Posts</span>
+        </h2>
+        <span className="text-xs text-gray-400">{total} post{total !== 1 ? "s" : ""}</span>
+      </div>
 
       <div className="space-y-3">
         {items.map((item, idx) => (
@@ -237,6 +261,31 @@ export default function ContentList() {
           </div>
         ))}
       </div>
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
+          >
+            <ChevronLeft className="h-3 w-3" />
+            Prev
+          </button>
+          <span className="text-xs text-gray-500">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={!hasNext}
+            className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
+          >
+            Next
+            <ChevronRight className="h-3 w-3" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

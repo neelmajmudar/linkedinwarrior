@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user
@@ -95,19 +95,31 @@ async def start_competitor_analysis(
 
 @router.get("/reports")
 async def list_reports(
-    limit: int = 10,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
 ):
     """List the user's past creator analysis reports."""
     db = get_supabase()
-    result = db.table("creator_reports") \
+    offset = (page - 1) * page_size
+
+    count_result = db.table("creator_reports").select("id", count="exact").eq("user_id", user["id"]).execute()
+    total = count_result.count or 0
+
+    data_result = db.table("creator_reports") \
         .select("id, niche, creators_analyzed, status, error_message, created_at") \
         .eq("user_id", user["id"]) \
         .order("created_at", desc=True) \
-        .limit(limit) \
+        .range(offset, offset + page_size - 1) \
         .execute()
 
-    return {"reports": result.data or []}
+    return {
+        "reports": data_result.data or [],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "has_next": (offset + page_size) < total,
+    }
 
 
 @router.get("/reports/{report_id}")

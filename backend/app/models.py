@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Generic, List, Optional, TypeVar
 from datetime import datetime
 from enum import Enum
+
+T = TypeVar("T")
 
 
 class ContentStatus(str, Enum):
@@ -79,3 +81,11 @@ class ContentItem(BaseModel):
 
 class LinkedInStatus(BaseModel):
     connected: bool
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    page_size: int
+    has_next: bool

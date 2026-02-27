@@ -87,8 +87,10 @@ export default function CalendarView() {
   async function loadItems() {
     setLoading(true);
     try {
-      const data = await apiGet<ContentItem[]>("/api/content");
-      setItems(data);
+      const data = await apiGet<{ items: ContentItem[] }>(
+        "/api/content?page=1&page_size=100"
+      );
+      setItems(data.items ?? []);
     } catch {
       // ignore
     }

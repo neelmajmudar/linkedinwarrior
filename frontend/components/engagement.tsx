@@ -16,6 +16,8 @@ import {
   Pencil,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
 } from "lucide-react";
 
@@ -58,6 +60,11 @@ export default function Engagement() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyHasNext, setHistoryHasNext] = useState(false);
+  const HISTORY_PAGE_SIZE = 10;
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / HISTORY_PAGE_SIZE));
   const [engageTaskId, setEngageTaskId] = useState<string | null>(null);
   const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
 
@@ -160,14 +167,20 @@ export default function Engagement() {
     }
   }
 
-  async function loadHistory() {
+  async function loadHistory(p = historyPage) {
     try {
       const data = await apiGet<{
         comments: HistoryItem[];
+        total: number;
+        page: number;
+        page_size: number;
+        has_next: boolean;
         remaining_today: number;
         daily_limit: number;
-      }>("/api/engagement/history");
+      }>(`/api/engagement/history?page=${p}&page_size=${HISTORY_PAGE_SIZE}`);
       setHistory(data.comments || []);
+      setHistoryTotal(data.total);
+      setHistoryHasNext(data.has_next);
       setRemaining(data.remaining_today);
       setDailyLimit(data.daily_limit);
     } catch {
@@ -308,7 +321,7 @@ export default function Engagement() {
           <button
             onClick={() => {
               setShowHistory(!showHistory);
-              if (!showHistory) loadHistory();
+              if (!showHistory) { setHistoryPage(1); loadHistory(1); }
             }}
             className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full"
           >
@@ -321,9 +334,10 @@ export default function Engagement() {
       {/* History view */}
       {showHistory ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-500">
-            Comment History
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-500">Comment History</h3>
+            <span className="text-xs text-gray-400">{historyTotal} comment{historyTotal !== 1 ? "s" : ""}</span>
+          </div>
           {history.length === 0 ? (
             <p className="text-sm text-gray-400">
               No comments yet.
@@ -404,6 +418,39 @@ export default function Engagement() {
                 </div>
               );
             })
+          )}
+
+          {/* History pagination */}
+          {historyTotalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={() => {
+                  const p = Math.max(1, historyPage - 1);
+                  setHistoryPage(p);
+                  loadHistory(p);
+                }}
+                disabled={historyPage === 1}
+                className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3 w-3" />
+                Prev
+              </button>
+              <span className="text-xs text-gray-500">
+                Page {historyPage} of {historyTotalPages}
+              </span>
+              <button
+                onClick={() => {
+                  const p = historyPage + 1;
+                  setHistoryPage(p);
+                  loadHistory(p);
+                }}
+                disabled={!historyHasNext}
+                className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
+              >
+                Next
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
           )}
         </div>
       ) : (

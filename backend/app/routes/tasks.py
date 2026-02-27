@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.auth import get_current_user
-from app.task_manager import get_task, list_tasks, get_completed_unseen
+from app.task_manager import get_task, list_tasks, list_tasks_paginated, get_completed_unseen
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -13,10 +13,13 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 @router.get("")
 async def get_all_tasks(
     pending_only: bool = Query(False),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
 ):
     """List all tasks for the current user."""
-    return {"tasks": list_tasks(user["id"], pending_only=pending_only)}
+    result = list_tasks_paginated(user["id"], pending_only=pending_only, page=page, page_size=page_size)
+    return result
 
 
 @router.get("/notifications")
