@@ -1,11 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiPost } from "@/lib/api";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 export default function LinkedInCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      }
+    >
+      <LinkedInCallbackInner />
+    </Suspense>
+  );
+}
+
+function LinkedInCallbackInner() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     "loading"
