@@ -363,6 +363,7 @@ async def skip_comment(
 @router.get("/history")
 async def get_history(
     status: Optional[str] = None,
+    exclude_status: Optional[str] = None,
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
@@ -374,6 +375,8 @@ async def get_history(
     count_query = db.table("auto_comments").select("id", count="exact").eq("user_id", user["id"])
     if status:
         count_query = count_query.eq("status", status)
+    if exclude_status:
+        count_query = count_query.neq("status", exclude_status)
     count_result = count_query.execute()
     total = count_result.count or 0
 
@@ -383,6 +386,8 @@ async def get_history(
         .order("created_at", desc=True)
     if status:
         data_query = data_query.eq("status", status)
+    if exclude_status:
+        data_query = data_query.neq("status", exclude_status)
     data_result = data_query.range(offset, offset + page_size - 1).execute()
 
     remaining = get_remaining_daily_comments(user["id"])

@@ -161,13 +161,13 @@ export default function CreatorAnalysis() {
   }
 
   async function startCreatorAnalysis() {
-    if (!niche.trim()) { setError("Enter a niche or keywords."); return; }
+    if (!niche.trim() && creatorUrls.length === 0) { setError("Enter a niche/keywords or add at least one creator URL."); return; }
     setRunning(true);
     setError("");
     setSelectedReport(null);
     try {
       const data = await apiPost<{ report_id: string }>("/api/creator-analysis/run", {
-        niche: niche.trim(),
+        niche: niche.trim() || undefined,
         creator_urls: creatorUrls.length > 0 ? creatorUrls : undefined,
       });
       setPollingId(data.report_id);
@@ -287,7 +287,7 @@ export default function CreatorAnalysis() {
         <div className="glass-card p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1.5">
-              Niche / Keywords
+              Niche / Keywords {creatorUrls.length > 0 && <span className="text-gray-400 font-normal">(optional)</span>}
             </label>
             <input
               type="text"
@@ -301,7 +301,7 @@ export default function CreatorAnalysis() {
 
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1.5">
-              Specific Creator URLs <span className="text-gray-400 font-normal">(optional)</span>
+              Creator Profile URLs {!niche.trim() && creatorUrls.length === 0 && <span className="text-gray-400 font-normal">(or enter a niche above)</span>}
             </label>
             <div className="flex gap-2 mb-2">
               <input
@@ -328,7 +328,7 @@ export default function CreatorAnalysis() {
                     key={url}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warm-50 text-warm-600 text-xs border border-warm-200"
                   >
-                    {url.split("/").pop()}
+                    {url.replace(/\/+$/, "").split("/").pop() || url}
                     <button onClick={() => setCreatorUrls(creatorUrls.filter((u) => u !== url))} className="hover:text-red-500 transition-colors">
                       <X className="h-3 w-3" />
                     </button>
@@ -340,11 +340,11 @@ export default function CreatorAnalysis() {
 
           <button
             onClick={startCreatorAnalysis}
-            disabled={!niche.trim()}
+            disabled={!niche.trim() && creatorUrls.length === 0}
             className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
           >
             <Sparkles className="h-4 w-4" />
-            Analyze Top Creators
+            {creatorUrls.length > 0 && !niche.trim() ? "Analyze Creators" : "Analyze Top Creators"}
           </button>
         </div>
       )}

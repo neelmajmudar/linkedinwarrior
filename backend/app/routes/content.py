@@ -61,6 +61,7 @@ async def _run_generate(user_id: str, prompt: str) -> dict:
 @router.get("")
 async def list_content(
     status: str | None = None,
+    exclude_status: str | None = None,
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     user: dict = Depends(get_current_user),
@@ -73,6 +74,8 @@ async def list_content(
     count_query = db.table("content_items").select("id", count="exact").eq("user_id", user["id"])
     if status:
         count_query = count_query.eq("status", status)
+    if exclude_status:
+        count_query = count_query.neq("status", exclude_status)
     count_result = count_query.execute()
     total = count_result.count or 0
 
@@ -80,6 +83,8 @@ async def list_content(
     data_query = db.table("content_items").select("*").eq("user_id", user["id"]).order("created_at", desc=True)
     if status:
         data_query = data_query.eq("status", status)
+    if exclude_status:
+        data_query = data_query.neq("status", exclude_status)
     data_result = data_query.range(offset, offset + page_size - 1).execute()
 
     return {
