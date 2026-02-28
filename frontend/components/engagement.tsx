@@ -2,6 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useEngagementTopics,
+  useEngagementRemaining,
+  useEngagementHistory,
+  useEngagementHistoryCount,
+  useSaveTopics,
+  queryKeys,
+} from "@/lib/queries";
 import { useTaskNotifications } from "./task-notifications";
 import {
   Search,
@@ -44,18 +53,16 @@ interface HistoryItem {
 }
 
 export default function Engagement() {
-  const [topics, setTopics] = useState<string[]>([]);
+  const qc = useQueryClient();
+  const topicsQuery = useEngagementTopics();
+  const remainingQuery = useEngagementRemaining();
+  const saveTopicsMutation = useSaveTopics();
+
   const [newTopic, setNewTopic] = useState("");
-  const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [previews, setPreviews] = useState<CommentPreview[]>([]);
-  const [publishedHistory, setPublishedHistory] = useState<HistoryItem[]>([]);
   const [pubHistoryPage, setPubHistoryPage] = useState(1);
-  const [pubHistoryTotal, setPubHistoryTotal] = useState(0);
-  const [pubHistoryHasNext, setPubHistoryHasNext] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [remaining, setRemaining] = useState(15);
-  const [dailyLimit, setDailyLimit] = useState(15);
   const [posting, setPosting] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -63,9 +70,19 @@ export default function Engagement() {
   const [error, setError] = useState("");
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
   const HISTORY_PAGE_SIZE = 10;
-  const pubHistoryTotalPages = Math.max(1, Math.ceil(pubHistoryTotal / HISTORY_PAGE_SIZE));
   const [engageTaskId, setEngageTaskId] = useState<string | null>(null);
   const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
+
+  const topics = topicsQuery.data?.topics ?? [];
+  const remaining = remainingQuery.data?.remaining_today ?? 15;
+  const dailyLimit = remainingQuery.data?.daily_limit ?? 15;
+
+  const historyCountQuery = useEngagementHistoryCount();
+  const historyQuery = useEngagementHistory(pubHistoryPage, HISTORY_PAGE_SIZE, showHistory);
+  const publishedHistory = historyQuery.data?.comments ?? [];
+  const pubHistoryTotal = historyCountQuery.data ?? 0;
+  const pubHistoryHasNext = historyQuery.data?.has_next ?? false;
+  const pubHistoryTotalPages = Math.max(1, Math.ceil(pubHistoryTotal / HISTORY_PAGE_SIZE));
 
   function toggleExpand(id: string) {
     setExpandedPosts((prev) => {
@@ -83,13 +100,13 @@ export default function Engagement() {
     if (active.status === "completed" && active.result) {
       const r = active.result as { posts?: CommentPreview[]; remaining_today?: number };
       setPreviews(r.posts || []);
-      if (r.remaining_today !== undefined) setRemaining(r.remaining_today);
       if ((r.posts || []).length === 0) {
         setMessage("No matching posts found. Try different topics.");
         setTimeout(() => setMessage(""), 3000);
       }
       setSearching(false);
       consumeTask("engage");
+      qc.invalidateQueries({ queryKey: queryKeys.engagementRemaining });
     } else if (active.status === "failed") {
       setError(active.error || "Search failed");
       consumeTask("engage");
@@ -117,7 +134,6 @@ export default function Engagement() {
         }>(`/api/tasks/${engageTaskId}`);
         if (data.status === "completed" && data.result) {
           setPreviews(data.result.posts || []);
-          setRemaining(data.result.remaining_today ?? remaining);
           if ((data.result.posts || []).length === 0) {
             setMessage("No matching posts found. Try different topics.");
             setTimeout(() => setMessage(""), 3000);
@@ -125,6 +141,7 @@ export default function Engagement() {
           setSearching(false);
           setEngageTaskId(null);
           consumeTask("engage");
+          qc.invalidateQueries({ queryKey: queryKeys.engagementRemaining });
         } else if (data.status === "failed") {
           setError(data.error || "Search failed");
           setSearching(false);
@@ -136,88 +153,19 @@ export default function Engagement() {
       }
     }, 4000);
     return () => clearInterval(interval);
-  }, [engageTaskId, remaining, consumeTask]);
-
-  useEffect(() => {
-    loadTopics();
-    loadRemaining();
-    // Only fetch the count for the toggle badge, not the full history
-    apiGet<HistoryResponse>(
-      `/api/engagement/history?status=posted&page=1&page_size=1`
-    ).then((data) => setPubHistoryTotal(data.total)).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (showHistory) loadPublishedHistory(pubHistoryPage);
-  }, [showHistory, pubHistoryPage]);
-
-  async function loadTopics() {
-    setLoading(true);
-    try {
-      const data = await apiGet<{ topics: string[] }>("/api/engagement/topics");
-      setTopics(data.topics || []);
-    } catch {
-      // ignore
-    }
-    setLoading(false);
-  }
-
-  async function loadRemaining() {
-    try {
-      const data = await apiGet<{ remaining_today: number; daily_limit: number }>(
-        "/api/engagement/remaining"
-      );
-      setRemaining(data.remaining_today);
-      setDailyLimit(data.daily_limit);
-    } catch {
-      // ignore
-    }
-  }
-
-  interface HistoryResponse {
-    comments: HistoryItem[];
-    total: number;
-    page: number;
-    page_size: number;
-    has_next: boolean;
-    remaining_today: number;
-    daily_limit: number;
-  }
-
-  async function loadPublishedHistory(p: number) {
-    try {
-      const data = await apiGet<HistoryResponse>(
-        `/api/engagement/history?status=posted&page=${p}&page_size=${HISTORY_PAGE_SIZE}`
-      );
-      setPublishedHistory(data.comments || []);
-      setPubHistoryTotal(data.total);
-      setPubHistoryHasNext(data.has_next);
-    } catch {
-      // ignore
-    }
-  }
+  }, [engageTaskId, consumeTask, qc]);
 
   async function addTopic() {
     const trimmed = newTopic.trim();
     if (!trimmed || topics.includes(trimmed)) return;
     const updated = [...topics, trimmed];
-    setTopics(updated);
     setNewTopic("");
-    try {
-      await apiPost("/api/engagement/topics", { topics: updated });
-    } catch {
-      setTopics(topics);
-    }
+    saveTopicsMutation.mutate(updated);
   }
 
   async function removeTopic(topic: string) {
     const updated = topics.filter((t) => t !== topic);
-    setTopics(updated);
-    try {
-      await apiPost("/api/engagement/topics", { topics: updated });
-    } catch {
-      setTopics(topics);
-    }
+    saveTopicsMutation.mutate(updated);
   }
 
   async function searchPosts() {
@@ -252,12 +200,11 @@ export default function Engagement() {
       setPreviews((prev) =>
         prev.filter((p) => p.comment_id !== commentId)
       );
-      setRemaining((r) => Math.max(0, r - 1));
       setEditingId(null);
       setMessage("Comment posted!");
       setTimeout(() => setMessage(""), 2000);
-      setPubHistoryTotal((t) => t + 1);
-      if (showHistory) await loadPublishedHistory(pubHistoryPage);
+      qc.invalidateQueries({ queryKey: queryKeys.engagementRemaining });
+      qc.invalidateQueries({ queryKey: ["engagement", "history"] });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to post");
     }
@@ -280,7 +227,7 @@ export default function Engagement() {
   async function deleteComment(commentId: string) {
     try {
       await apiDelete(`/api/engagement/comments/${commentId}`);
-      setPublishedHistory((prev) => prev.filter((h) => h.id !== commentId));
+      qc.invalidateQueries({ queryKey: ["engagement", "history"] });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete");
     }
@@ -327,7 +274,7 @@ export default function Engagement() {
               </button>
             </span>
           ))}
-          {topics.length === 0 && !loading && (
+          {topics.length === 0 && !topicsQuery.isLoading && (
             <span className="text-sm text-gray-400">
               No topics yet. Add keywords to find relevant posts.
             </span>

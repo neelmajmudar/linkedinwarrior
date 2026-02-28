@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { apiGet, apiPost } from "@/lib/api";
+import { useAnalytics, useRefreshAnalytics } from "@/lib/queries";
 import {
   LineChart,
   Line,
@@ -61,39 +60,10 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsDashboard() {
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { data, isLoading } = useAnalytics();
+  const refreshMutation = useRefreshAnalytics();
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
-
-  async function loadAnalytics() {
-    setLoading(true);
-    try {
-      const result = await apiGet<AnalyticsData>("/api/analytics");
-      console.log("[Analytics] Received data:", result);
-      console.log("[Analytics] metric_trends:", result.metric_trends);
-      setData(result);
-    } catch {
-      // ignore
-    }
-    setLoading(false);
-  }
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      await apiPost("/api/analytics/refresh");
-      await loadAnalytics();
-    } catch {
-      // ignore
-    }
-    setRefreshing(false);
-  }
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
@@ -183,16 +153,16 @@ export default function AnalyticsDashboard() {
           </p>
         </div>
         <button
-          onClick={handleRefresh}
-          disabled={refreshing}
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
           className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full disabled:opacity-50"
         >
-          {refreshing ? (
+          {refreshMutation.isPending ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RefreshCw className="h-3.5 w-3.5" />
           )}
-          {refreshing ? "Refreshing..." : "Refresh Data"}
+          {refreshMutation.isPending ? "Refreshing..." : "Refresh Data"}
         </button>
       </div>
 

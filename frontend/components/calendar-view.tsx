@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
-import { apiGet, apiPatch, apiDelete, getAuthHeaders } from "@/lib/api";
+import { useState, useMemo, useRef } from "react";
+import { apiPatch, apiDelete, getAuthHeaders } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAllContent } from "@/lib/queries";
 import {
   format,
   startOfMonth,
@@ -54,8 +56,11 @@ const STATUS_DOT: Record<string, string> = {
 type ViewMode = "month" | "week";
 
 export default function CalendarView() {
-  const [items, setItems] = useState<ContentItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const contentQuery = useAllContent();
+  const items = contentQuery.data?.items ?? [];
+  const loading = contentQuery.isLoading;
+
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [currentWeekStart, setCurrentWeekStart] = useState(
@@ -80,21 +85,8 @@ export default function CalendarView() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadItems();
-  }, []);
-
-  async function loadItems() {
-    setLoading(true);
-    try {
-      const data = await apiGet<{ items: ContentItem[] }>(
-        "/api/content?page=1&page_size=100"
-      );
-      setItems(data.items ?? []);
-    } catch {
-      // ignore
-    }
-    setLoading(false);
+  function invalidateContent() {
+    qc.invalidateQueries({ queryKey: ["content"] });
   }
 
   const monthDays = useMemo(() => {
@@ -162,7 +154,7 @@ export default function CalendarView() {
       }
       const data = await res.json();
       setEditImageUrl(data.image_url);
-      await loadItems();
+      invalidateContent();
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : "Failed to upload image");
     }
@@ -175,7 +167,7 @@ export default function CalendarView() {
     try {
       await apiDelete(`/api/content/${contentId}/image`);
       setEditImageUrl(null);
-      await loadItems();
+      invalidateContent();
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : "Failed to remove image");
     }
@@ -196,7 +188,7 @@ export default function CalendarView() {
         payload.scheduled_at = `${editDate}T${editTime}:00`;
       }
       await apiPatch(`/api/content/${editingId}`, payload);
-      await loadItems();
+      invalidateContent();
       cancelEdit();
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : "Failed to save changes");
@@ -210,7 +202,7 @@ export default function CalendarView() {
     try {
       await apiDelete(`/api/content/${deletingId}`);
       setDeletingId(null);
-      await loadItems();
+      invalidateContent();
     } catch (err: unknown) {
       setEditError(err instanceof Error ? err.message : "Failed to delete post");
     }

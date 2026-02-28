@@ -16,6 +16,12 @@ import { CheckCircle2, AlertCircle, X, PenTool, MessageSquare, Sparkles } from "
 export type TaskType = "generate" | "engage" | "research";
 export type TabId = "generate" | "engage" | "research";
 
+export const TAB_ROUTES: Record<TabId, string> = {
+  generate: "/dashboard/generate",
+  engage: "/dashboard/engage",
+  research: "/dashboard/research",
+};
+
 export interface TaskNotification {
   task_id: string;
   task_type: TaskType;
