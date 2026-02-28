@@ -11,7 +11,6 @@ import {
   Send,
   Plus,
   Trash2,
-  MessageSquare,
   History,
   Pencil,
   ChevronDown,
@@ -50,7 +49,10 @@ export default function Engagement() {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [previews, setPreviews] = useState<CommentPreview[]>([]);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [publishedHistory, setPublishedHistory] = useState<HistoryItem[]>([]);
+  const [pubHistoryPage, setPubHistoryPage] = useState(1);
+  const [pubHistoryTotal, setPubHistoryTotal] = useState(0);
+  const [pubHistoryHasNext, setPubHistoryHasNext] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [remaining, setRemaining] = useState(15);
   const [dailyLimit, setDailyLimit] = useState(15);
@@ -60,11 +62,8 @@ export default function Engagement() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyHasNext, setHistoryHasNext] = useState(false);
   const HISTORY_PAGE_SIZE = 10;
-  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / HISTORY_PAGE_SIZE));
+  const pubHistoryTotalPages = Math.max(1, Math.ceil(pubHistoryTotal / HISTORY_PAGE_SIZE));
   const [engageTaskId, setEngageTaskId] = useState<string | null>(null);
   const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
 
@@ -142,7 +141,15 @@ export default function Engagement() {
   useEffect(() => {
     loadTopics();
     loadRemaining();
+    // Only fetch the count for the toggle badge, not the full history
+    apiGet<HistoryResponse>(
+      `/api/engagement/history?status=posted&page=1&page_size=1`
+    ).then((data) => setPubHistoryTotal(data.total)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (showHistory) loadPublishedHistory(pubHistoryPage);
+  }, [showHistory, pubHistoryPage]);
 
   async function loadTopics() {
     setLoading(true);
@@ -167,22 +174,24 @@ export default function Engagement() {
     }
   }
 
-  async function loadHistory(p = historyPage) {
+  interface HistoryResponse {
+    comments: HistoryItem[];
+    total: number;
+    page: number;
+    page_size: number;
+    has_next: boolean;
+    remaining_today: number;
+    daily_limit: number;
+  }
+
+  async function loadPublishedHistory(p: number) {
     try {
-      const data = await apiGet<{
-        comments: HistoryItem[];
-        total: number;
-        page: number;
-        page_size: number;
-        has_next: boolean;
-        remaining_today: number;
-        daily_limit: number;
-      }>(`/api/engagement/history?page=${p}&page_size=${HISTORY_PAGE_SIZE}`);
-      setHistory(data.comments || []);
-      setHistoryTotal(data.total);
-      setHistoryHasNext(data.has_next);
-      setRemaining(data.remaining_today);
-      setDailyLimit(data.daily_limit);
+      const data = await apiGet<HistoryResponse>(
+        `/api/engagement/history?status=posted&page=${p}&page_size=${HISTORY_PAGE_SIZE}`
+      );
+      setPublishedHistory(data.comments || []);
+      setPubHistoryTotal(data.total);
+      setPubHistoryHasNext(data.has_next);
     } catch {
       // ignore
     }
@@ -241,14 +250,14 @@ export default function Engagement() {
         edited_text: editedText || undefined,
       });
       setPreviews((prev) =>
-        prev.map((p) =>
-          p.comment_id === commentId ? { ...p, status: "posted" } : p
-        )
+        prev.filter((p) => p.comment_id !== commentId)
       );
       setRemaining((r) => Math.max(0, r - 1));
       setEditingId(null);
       setMessage("Comment posted!");
       setTimeout(() => setMessage(""), 2000);
+      setPubHistoryTotal((t) => t + 1);
+      if (showHistory) await loadPublishedHistory(pubHistoryPage);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to post");
     }
@@ -268,29 +277,10 @@ export default function Engagement() {
     }
   }
 
-  async function approveHistoryComment(commentId: string) {
-    setPosting((p) => ({ ...p, [commentId]: true }));
-    setError("");
-    try {
-      await apiPost("/api/engagement/approve", { comment_id: commentId });
-      setHistory((prev) =>
-        prev.map((h) =>
-          h.id === commentId ? { ...h, status: "posted" } : h
-        )
-      );
-      setRemaining((r) => Math.max(0, r - 1));
-      setMessage("Comment posted!");
-      setTimeout(() => setMessage(""), 2000);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to post");
-    }
-    setPosting((p) => ({ ...p, [commentId]: false }));
-  }
-
   async function deleteComment(commentId: string) {
     try {
       await apiDelete(`/api/engagement/comments/${commentId}`);
-      setHistory((prev) => prev.filter((h) => h.id !== commentId));
+      setPublishedHistory((prev) => prev.filter((h) => h.id !== commentId));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete");
     }
@@ -314,352 +304,330 @@ export default function Engagement() {
             Find relevant posts and generate personalized comments in your voice.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-            {remaining}/{dailyLimit} comments left today
-          </span>
+        <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+          {remaining}/{dailyLimit} comments left today
+        </span>
+      </div>
+
+      {/* Topics configuration */}
+      <div className="glass-card p-4 space-y-3">
+        <h3 className="text-sm font-medium text-[#1a1a1a]">Engagement Topics</h3>
+        <div className="flex flex-wrap gap-2">
+          {topics.map((topic) => (
+            <span
+              key={topic}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warm-50 text-warm-600 text-sm border border-warm-200"
+            >
+              {topic}
+              <button
+                onClick={() => removeTopic(topic)}
+                className="hover:text-red-500 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {topics.length === 0 && !loading && (
+            <span className="text-sm text-gray-400">
+              No topics yet. Add keywords to find relevant posts.
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newTopic}
+            onChange={(e) => setNewTopic(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addTopic()}
+            placeholder="e.g. AI startups, product management..."
+            className="input-field flex-1"
+          />
           <button
-            onClick={() => {
-              setShowHistory(!showHistory);
-              if (!showHistory) { setHistoryPage(1); loadHistory(1); }
-            }}
-            className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full"
+            onClick={addTopic}
+            disabled={!newTopic.trim()}
+            className="btn-primary px-4 py-2 text-sm flex items-center gap-1.5"
           >
-            <History className="h-3.5 w-3.5" />
-            {showHistory ? "Back" : "History"}
+            <Plus className="h-3.5 w-3.5" />
+            Add
           </button>
         </div>
       </div>
 
-      {/* History view */}
-      {showHistory ? (
+      {/* Search button */}
+      <button
+        onClick={searchPosts}
+        disabled={searching || topics.length === 0 || remaining <= 0}
+        className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+      >
+        {searching ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Search className="h-4 w-4" />
+        )}
+        {searching ? "Searching & generating comments..." : "Find Posts & Generate Comments"}
+      </button>
+
+      {/* Pending previews */}
+      {previews.filter((p) => p.status === "pending").length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-500">Comment History</h3>
-            <span className="text-xs text-gray-400">{historyTotal} comment{historyTotal !== 1 ? "s" : ""}</span>
-          </div>
-          {history.length === 0 ? (
-            <p className="text-sm text-gray-400">
-              No comments yet.
-            </p>
-          ) : (
-            history.map((item) => {
-              const isExpanded = expandedPosts.has(`h-${item.id}`);
-              const isLong = item.post_content.length > 150;
-              return (
-                <div key={item.id} className="glass-card p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    {item.post_author_url ? (
+          <h3 className="text-sm font-medium text-gray-500">
+            Review Comments ({previews.filter((p) => p.status === "pending").length} pending)
+          </h3>
+          {previews.filter((p) => p.status === "pending").map((preview) => {
+            const isExpanded = expandedPosts.has(preview.comment_id);
+            const isLong = preview.post_content.length > 150;
+            return (
+            <div
+              key={preview.comment_id}
+              className="glass-card p-4 space-y-3"
+            >
+              {/* Post info */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  {preview.post_author_url ? (
+                    <a
+                      href={preview.post_author_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-warm-500 hover:text-warm-600 flex items-center gap-1 transition-colors"
+                    >
+                      {preview.post_author || "Unknown author"}
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  ) : (
+                    <span className="text-xs font-medium text-warm-500">
+                      {preview.post_author || "Unknown author"}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {preview.share_url && (
                       <a
-                        href={item.post_author_url}
+                        href={preview.share_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs font-medium text-warm-500 hover:text-warm-600 flex items-center gap-1 transition-colors"
+                        className="text-[10px] text-gray-400 hover:text-warm-500 transition-colors"
                       >
-                        {item.post_author || "Unknown author"}
-                        <ExternalLink className="h-2.5 w-2.5" />
+                        View post ↗
                       </a>
-                    ) : (
-                      <span className="text-xs font-medium text-gray-500">
-                        {item.post_author || "Unknown author"}
-                      </span>
                     )}
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${
-                          STATUS_BADGE[item.status] || ""
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                      <span className="text-[10px] text-gray-400">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <p className={`text-xs text-gray-400 whitespace-pre-wrap ${!isExpanded && isLong ? "line-clamp-2" : ""}`}>
-                      {item.post_content}
-                    </p>
-                    {isLong && (
-                      <button
-                        onClick={() => toggleExpand(`h-${item.id}`)}
-                        className="text-[10px] text-warm-500 hover:text-warm-600 mt-1 flex items-center gap-0.5"
-                      >
-                        {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        {isExpanded ? "Show less" : "Show more"}
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-sm text-[#1a1a1a]">{item.comment_text}</p>
-                  <div className="flex items-center gap-2 pt-1">
-                    {item.status === "pending" && (
-                      <button
-                        onClick={() => approveHistoryComment(item.id)}
-                        disabled={posting[item.id] || remaining <= 0}
-                        className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
-                      >
-                        {posting[item.id] ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Send className="h-3 w-3" />
-                        )}
-                        Publish
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteComment(item.id)}
-                      className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full text-red-400 hover:text-red-600 hover:border-red-200 transition-colors"
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${
+                        STATUS_BADGE[preview.status] || ""
+                      }`}
                     >
-                      <Trash2 className="h-3 w-3" />
-                      Remove
-                    </button>
+                      {preview.status}
+                    </span>
                   </div>
                 </div>
-              );
-            })
-          )}
+                <div>
+                  <p className={`text-xs text-gray-400 whitespace-pre-wrap ${!isExpanded && isLong ? "line-clamp-3" : ""}`}>
+                    {preview.post_content}
+                  </p>
+                  {isLong && (
+                    <button
+                      onClick={() => toggleExpand(preview.comment_id)}
+                      className="text-[10px] text-warm-500 hover:text-warm-600 mt-1 flex items-center gap-0.5"
+                    >
+                      {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {isExpanded ? "Show less" : "Show full post"}
+                    </button>
+                  )}
+                </div>
+              </div>
 
-          {/* History pagination */}
-          {historyTotalPages > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <button
-                onClick={() => {
-                  const p = Math.max(1, historyPage - 1);
-                  setHistoryPage(p);
-                  loadHistory(p);
-                }}
-                disabled={historyPage === 1}
-                className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
-              >
-                <ChevronLeft className="h-3 w-3" />
-                Prev
-              </button>
-              <span className="text-xs text-gray-500">
-                Page {historyPage} of {historyTotalPages}
-              </span>
-              <button
-                onClick={() => {
-                  const p = historyPage + 1;
-                  setHistoryPage(p);
-                  loadHistory(p);
-                }}
-                disabled={!historyHasNext}
-                className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="h-3 w-3" />
-              </button>
+              {/* Comment */}
+              <div className="pl-3 border-l-2 border-warm-300">
+                {editingId === preview.comment_id ? (
+                  <textarea
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    rows={3}
+                    className="input-field text-sm w-full"
+                  />
+                ) : (
+                  <p className="text-sm text-[#1a1a1a]">{preview.comment_text}</p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                {editingId === preview.comment_id ? (
+                  <>
+                    <button
+                      onClick={() => approveComment(preview.comment_id, editText)}
+                      disabled={posting[preview.comment_id]}
+                      className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
+                    >
+                      {posting[preview.comment_id] ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Send className="h-3 w-3" />
+                      )}
+                      Post Edited
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="btn-ghost px-3 py-1.5 text-xs border border-gray-200 rounded-full"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => approveComment(preview.comment_id)}
+                      disabled={posting[preview.comment_id]}
+                      className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
+                    >
+                      {posting[preview.comment_id] ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Check className="h-3 w-3" />
+                      )}
+                      Approve & Post
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingId(preview.comment_id);
+                        setEditText(preview.comment_text);
+                      }}
+                      className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => skipComment(preview.comment_id)}
+                      className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full text-gray-400"
+                    >
+                      <X className="h-3 w-3" />
+                      Skip
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          )}
+          );
+          })}
         </div>
-      ) : (
-        <>
-          {/* Topics configuration */}
-          <div className="glass-card p-4 space-y-3">
-            <h3 className="text-sm font-medium text-[#1a1a1a]">Engagement Topics</h3>
-            <div className="flex flex-wrap gap-2">
-              {topics.map((topic) => (
-                <span
-                  key={topic}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warm-50 text-warm-600 text-sm border border-warm-200"
-                >
-                  {topic}
-                  <button
-                    onClick={() => removeTopic(topic)}
-                    className="hover:text-red-500 transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-              {topics.length === 0 && !loading && (
-                <span className="text-sm text-gray-400">
-                  No topics yet. Add keywords to find relevant posts.
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newTopic}
-                onChange={(e) => setNewTopic(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addTopic()}
-                placeholder="e.g. AI startups, product management..."
-                className="input-field flex-1"
-              />
-              <button
-                onClick={addTopic}
-                disabled={!newTopic.trim()}
-                className="btn-primary px-4 py-2 text-sm flex items-center gap-1.5"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add
-              </button>
-            </div>
-          </div>
+      )}
 
-          {/* Search button */}
-          <button
-            onClick={searchPosts}
-            disabled={searching || topics.length === 0 || remaining <= 0}
-            className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
-          >
-            {searching ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            {searching ? "Searching & generating comments..." : "Find Posts & Generate Comments"}
-          </button>
+      {/* History toggle button */}
+      <div className="pt-4">
+        <button
+          onClick={() => setShowHistory((prev) => !prev)}
+          className="btn-ghost w-full py-2.5 text-sm flex items-center justify-center gap-2 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+        >
+          <History className="h-4 w-4 text-green-600" />
+          {showHistory ? "Hide History" : "View Published History"}
+          {!showHistory && pubHistoryTotal > 0 && (
+            <span className="text-xs text-gray-400">({pubHistoryTotal})</span>
+          )}
+        </button>
+      </div>
 
-          {/* Previews */}
-          {previews.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium text-gray-500">
-                Review Comments ({previews.filter((p) => p.status === "pending").length} pending)
-              </h3>
-              {previews.map((preview) => {
-                const isExpanded = expandedPosts.has(preview.comment_id);
-                const isLong = preview.post_content.length > 150;
+      {/* Published comments history section (lazy-loaded on toggle) */}
+      {showHistory && (
+        <div className="space-y-3 pt-2 animate-fade-in">
+          {publishedHistory.length > 0 ? (
+            <>
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-green-600" />
+                <h3 className="text-sm font-medium text-gray-500">History</h3>
+                <span className="text-xs text-gray-400">({pubHistoryTotal})</span>
+              </div>
+              <div className="border-t border-gray-100" />
+              {publishedHistory.map((item) => {
+                const isExpanded = expandedPosts.has(`h-${item.id}`);
+                const isLong = item.post_content.length > 150;
                 return (
-                <div
-                  key={preview.comment_id}
-                  className="glass-card p-4 space-y-3"
-                >
-                  {/* Post info */}
-                  <div className="space-y-1">
+                  <div key={item.id} className="glass-card p-4 space-y-2">
                     <div className="flex items-center justify-between">
-                      {preview.post_author_url ? (
+                      {item.post_author_url ? (
                         <a
-                          href={preview.post_author_url}
+                          href={item.post_author_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs font-medium text-warm-500 hover:text-warm-600 flex items-center gap-1 transition-colors"
                         >
-                          {preview.post_author || "Unknown author"}
+                          {item.post_author || "Unknown author"}
                           <ExternalLink className="h-2.5 w-2.5" />
                         </a>
                       ) : (
-                        <span className="text-xs font-medium text-warm-500">
-                          {preview.post_author || "Unknown author"}
+                        <span className="text-xs font-medium text-gray-500">
+                          {item.post_author || "Unknown author"}
                         </span>
                       )}
                       <div className="flex items-center gap-2">
-                        {preview.share_url && (
-                          <a
-                            href={preview.share_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-gray-400 hover:text-warm-500 transition-colors"
-                          >
-                            View post ↗
-                          </a>
-                        )}
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full border capitalize ${
-                            STATUS_BADGE[preview.status] || ""
+                            STATUS_BADGE[item.status] || ""
                           }`}
                         >
-                          {preview.status}
+                          {item.status}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(item.created_at).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
                     <div>
-                      <p className={`text-xs text-gray-400 whitespace-pre-wrap ${!isExpanded && isLong ? "line-clamp-3" : ""}`}>
-                        {preview.post_content}
+                      <p className={`text-xs text-gray-400 whitespace-pre-wrap ${!isExpanded && isLong ? "line-clamp-2" : ""}`}>
+                        {item.post_content}
                       </p>
                       {isLong && (
                         <button
-                          onClick={() => toggleExpand(preview.comment_id)}
+                          onClick={() => toggleExpand(`h-${item.id}`)}
                           className="text-[10px] text-warm-500 hover:text-warm-600 mt-1 flex items-center gap-0.5"
                         >
                           {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                          {isExpanded ? "Show less" : "Show full post"}
+                          {isExpanded ? "Show less" : "Show more"}
                         </button>
                       )}
                     </div>
-                  </div>
-
-                  {/* Comment */}
-                  <div className="pl-3 border-l-2 border-warm-300">
-                    {editingId === preview.comment_id ? (
-                      <textarea
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        rows={3}
-                        className="input-field text-sm w-full"
-                      />
-                    ) : (
-                      <p className="text-sm text-[#1a1a1a]">{preview.comment_text}</p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  {preview.status === "pending" && (
-                    <div className="flex items-center gap-2">
-                      {editingId === preview.comment_id ? (
-                        <>
-                          <button
-                            onClick={() => approveComment(preview.comment_id, editText)}
-                            disabled={posting[preview.comment_id]}
-                            className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
-                          >
-                            {posting[preview.comment_id] ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Send className="h-3 w-3" />
-                            )}
-                            Post Edited
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="btn-ghost px-3 py-1.5 text-xs border border-gray-200 rounded-full"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => approveComment(preview.comment_id)}
-                            disabled={posting[preview.comment_id]}
-                            className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5"
-                          >
-                            {posting[preview.comment_id] ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Check className="h-3 w-3" />
-                            )}
-                            Approve & Post
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingId(preview.comment_id);
-                              setEditText(preview.comment_text);
-                            }}
-                            className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full"
-                          >
-                            <Pencil className="h-3 w-3" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => skipComment(preview.comment_id)}
-                            className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full text-gray-400"
-                          >
-                            <X className="h-3 w-3" />
-                            Skip
-                          </button>
-                        </>
-                      )}
+                    <p className="text-sm text-[#1a1a1a]">{item.comment_text}</p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => deleteComment(item.id)}
+                        className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1.5 border border-gray-200 rounded-full text-red-400 hover:text-red-600 hover:border-red-200 transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Remove
+                      </button>
                     </div>
-                  )}
-                </div>
-              );
+                  </div>
+                );
               })}
-            </div>
+
+              {/* Published history pagination */}
+              {pubHistoryTotalPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    onClick={() => setPubHistoryPage((p) => Math.max(1, p - 1))}
+                    disabled={pubHistoryPage === 1}
+                    className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                    Prev
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    Page {pubHistoryPage} of {pubHistoryTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setPubHistoryPage((p) => p + 1)}
+                    disabled={!pubHistoryHasNext}
+                    className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full disabled:opacity-40"
+                  >
+                    Next
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">No published comments yet.</p>
           )}
-        </>
+        </div>
       )}
 
       {/* Messages */}

@@ -1,22 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Dashboard from "@/components/dashboard";
+import AuthPage from "@/components/auth-page";
 import type { Session } from "@supabase/supabase-js";
 
 export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push("/");
-        return;
-      }
       setSession(session);
       setLoading(false);
     });
@@ -24,17 +19,14 @@ export default function DashboardPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.push("/");
-        return;
-      }
       setSession(session);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, []);
 
-  if (loading || !session) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
@@ -45,6 +37,10 @@ export default function DashboardPage() {
         </div>
       </div>
     );
+  }
+
+  if (!session) {
+    return <AuthPage />;
   }
 
   return <Dashboard />;
