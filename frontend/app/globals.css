@@ -2,11 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
-
 /* ── LinkedInWarrior Design System ── */
 /* Style: Light Minimal · Palette: Warm Earth Tones (ImagineAI-inspired) */
-/* Typography: Inter */
+/* Typography: Inter (loaded via next/font/google) */
 
 :root {
   /* Core palette */
@@ -66,7 +64,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family:
-    "Inter",
+    var(--font-inter),
     system-ui,
     -apple-system,
     sans-serif;
@@ -81,7 +79,7 @@ h4,
 h5,
 h6 {
   font-family:
-    "Inter",
+    var(--font-inter),
     system-ui,
     -apple-system,
     sans-serif;
