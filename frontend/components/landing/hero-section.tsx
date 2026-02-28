@@ -19,13 +19,19 @@ const HeroSection = memo(function HeroSection() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsLoggedIn(!!session);
-    });
+    let mounted = true;
+    // Listen for auth state changes first so we catch late session restoration
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setIsLoggedIn(!!session);
+      if (mounted) setIsLoggedIn(!!session);
     });
-    return () => subscription.unsubscribe();
+    // Then check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) setIsLoggedIn(!!session);
+    });
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
