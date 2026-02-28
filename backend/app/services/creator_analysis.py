@@ -193,10 +193,11 @@ async def _fetch_posts_for_url(account_id: str, url: str) -> dict | None:
 # Creator analysis pipeline
 # ---------------------------------------------------------------------------
 
-async def run_analysis_pipeline(user_id: str, report_id: str, niche: str, creator_urls: list[str] | None = None):
+async def run_analysis_pipeline(user_id: str, report_id: str, niche: str | None = None, creator_urls: list[str] | None = None):
     """Full pipeline: search posts by niche → group by author → analyze → store report.
 
     This runs as a background task. Updates the creator_reports row as it progresses.
+    When only creator_urls are provided (no niche), keyword search is skipped entirely.
     """
     db = get_supabase()
 
@@ -231,7 +232,8 @@ async def run_analysis_pipeline(user_id: str, report_id: str, niche: str, creato
                     print(f"[creator_analysis] URL '{url}' -> no posts found")
 
         # Step 1b: Search posts by niche keywords and group by author
-        if len(creator_profiles) < 5:
+        # Only run keyword search when a niche is provided and we need more creators
+        if niche and niche.strip() and len(creator_profiles) < 5:
             # Split niche into keywords for broader search
             keywords = [kw.strip() for kw in niche.replace(",", " ").split() if kw.strip()]
             # Also search the full phrase
@@ -268,7 +270,7 @@ async def run_analysis_pipeline(user_id: str, report_id: str, niche: str, creato
         if not creator_profiles:
             db.table("creator_reports").update({
                 "status": "failed",
-                "error_message": f"Could not find any creators with posts for '{niche}'. Try different or broader keywords.",
+                "error_message": "Could not find any creators with posts. Try different URLs or add a niche keyword.",
             }).eq("id", report_id).execute()
             return
 
@@ -282,8 +284,10 @@ async def run_analysis_pipeline(user_id: str, report_id: str, niche: str, creato
         }).eq("id", report_id).execute()
 
         # Step 2: Run the LangGraph analysis agent
+        # Use a descriptive label when niche is not provided
+        analysis_niche = niche if niche and niche.strip() else "LinkedIn Creator Analysis"
         print(f"[creator_analysis] Running LangGraph analysis for {len(creator_profiles)} creators...")
-        report = await run_creator_analysis(niche, creator_profiles)
+        report = await run_creator_analysis(analysis_niche, creator_profiles)
 
         # Step 3: Store the completed report
         db.table("creator_reports").update({

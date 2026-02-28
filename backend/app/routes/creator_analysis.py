@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/creator-analysis", tags=["creator-analysis"])
 
 
 class RunAnalysisRequest(BaseModel):
-    niche: str = Field(..., min_length=2, max_length=200)
+    niche: Optional[str] = Field(None, max_length=200)
     creator_urls: Optional[list[str]] = None
 
 
@@ -29,11 +29,21 @@ async def start_analysis(
     user: dict = Depends(get_current_user),
 ):
     """Start a creator analysis. Creates a report row and kicks off background processing."""
+    has_niche = payload.niche and payload.niche.strip()
+    has_urls = payload.creator_urls and len(payload.creator_urls) > 0
+    if not has_niche and not has_urls:
+        raise HTTPException(status_code=422, detail="Provide a niche/keywords or at least one creator URL.")
+
+    # When only URLs are given, derive a display label from them
+    niche_label = payload.niche.strip() if has_niche else "Creators: " + ", ".join(
+        url.strip().rstrip("/").split("/")[-1] for url in (payload.creator_urls or []) if url.strip()
+    )
+
     db = get_supabase()
 
     row = db.table("creator_reports").insert({
         "user_id": user["id"],
-        "niche": payload.niche,
+        "niche": niche_label,
         "creator_urls": payload.creator_urls or [],
         "status": "pending",
     }).execute()
@@ -52,7 +62,7 @@ async def start_analysis(
             niche=payload.niche,
             creator_urls=payload.creator_urls,
         ),
-        meta={"report_id": report_id, "niche": payload.niche},
+        meta={"report_id": report_id, "niche": niche_label},
     )
 
     return {"report_id": report_id, "status": "pending"}
