@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { useState, useRef } from "react";
+import { apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useActiveContent,
+  usePublishedContent,
+  usePublishedContentCount,
+  queryKeys,
+} from "@/lib/queries";
 import { format } from "date-fns";
 import {
   Trash2,
@@ -49,20 +56,9 @@ const STATUS_COLORS: Record<string, string> = {
 const PAGE_SIZE = 10;
 
 export default function ContentList() {
-  // Active (non-published) posts
-  const [activeItems, setActiveItems] = useState<ContentItem[]>([]);
   const [activePage, setActivePage] = useState(1);
-  const [activeTotal, setActiveTotal] = useState(0);
-  const [activeHasNext, setActiveHasNext] = useState(false);
-
-  // Published posts
-  const [publishedItems, setPublishedItems] = useState<ContentItem[]>([]);
   const [pubPage, setPubPage] = useState(1);
-  const [pubTotal, setPubTotal] = useState(0);
-  const [pubHasNext, setPubHasNext] = useState(false);
-
   const [showHistory, setShowHistory] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -70,62 +66,33 @@ export default function ContentList() {
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
 
+  const activeQuery = useActiveContent(activePage, PAGE_SIZE);
+  const pubCountQuery = usePublishedContentCount();
+  const pubQuery = usePublishedContent(pubPage, PAGE_SIZE, showHistory);
+
+  const activeItems = (activeQuery.data?.items ?? []).filter((i) => i.status !== "published");
+  const activeTotal = activeQuery.data?.total ?? 0;
+  const activeHasNext = activeQuery.data?.has_next ?? false;
   const activeTotalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE));
+
+  const publishedItems = pubQuery.data?.items ?? [];
+  const pubTotal = pubCountQuery.data ?? 0;
+  const pubHasNext = pubQuery.data?.has_next ?? false;
   const pubTotalPages = Math.max(1, Math.ceil(pubTotal / PAGE_SIZE));
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      loadActiveItems(activePage),
-      // Fetch just the published count for the toggle button badge
-      apiGet<PaginatedResponse>(`/api/content?status=published&page=1&page_size=1`)
-        .then((data) => setPubTotal(data.total ?? 0))
-        .catch(() => {}),
-    ]).then(() => setLoading(false));
-  }, []);
+  const loading = activeQuery.isLoading;
 
-  useEffect(() => {
-    loadActiveItems(activePage);
-  }, [activePage]);
-
-  useEffect(() => {
-    if (showHistory) loadPublishedItems(pubPage);
-  }, [pubPage, showHistory]);
-
-  async function loadActiveItems(p: number) {
-    try {
-      const data = await apiGet<PaginatedResponse>(
-        `/api/content?exclude_status=published&page=${p}&page_size=${PAGE_SIZE}`
-      );
-      // Belt-and-suspenders: filter out published on the client side too
-      const nonPublished = (data.items ?? []).filter((i) => i.status !== "published");
-      setActiveItems(nonPublished);
-      setActiveTotal(data.total ?? 0);
-      setActiveHasNext(data.has_next ?? false);
-    } catch {
-      // ignore
-    }
-  }
-
-  async function loadPublishedItems(p: number) {
-    try {
-      const data = await apiGet<PaginatedResponse>(
-        `/api/content?status=published&page=${p}&page_size=${PAGE_SIZE}`
-      );
-      setPublishedItems(data.items ?? []);
-      setPubTotal(data.total ?? 0);
-      setPubHasNext(data.has_next ?? false);
-    } catch {
-      // ignore
-    }
+  function invalidateContent() {
+    qc.invalidateQueries({ queryKey: ["content"] });
   }
 
   async function handleDelete(id: string) {
     setActionLoading(id);
     try {
       await apiDelete(`/api/content/${id}`);
-      setActiveItems((prev) => prev.filter((i) => i.id !== id));
+      invalidateContent();
     } catch {
       // ignore
     }
@@ -136,8 +103,7 @@ export default function ContentList() {
     setActionLoading(id);
     try {
       await apiPost(`/api/content/${id}/publish`);
-      await loadActiveItems(activePage);
-      if (showHistory) await loadPublishedItems(pubPage);
+      invalidateContent();
     } catch {
       // ignore
     }
@@ -156,7 +122,7 @@ export default function ContentList() {
       setEditImageFile(null);
       setEditImagePreview(null);
       if (editFileInputRef.current) editFileInputRef.current.value = "";
-      await loadActiveItems(activePage);
+      invalidateContent();
     } catch {
       // ignore
     }
@@ -199,9 +165,7 @@ export default function ContentList() {
   async function removeEditImage(contentId: string) {
     try {
       await apiDelete(`/api/content/${contentId}/image`);
-      setActiveItems((prev) =>
-        prev.map((i) => (i.id === contentId ? { ...i, image_url: null } : i))
-      );
+      invalidateContent();
     } catch {
       // ignore
     }

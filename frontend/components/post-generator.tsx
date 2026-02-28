@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { apiPost, apiGet, apiPatch, apiDelete } from "@/lib/api";
+import { apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { useTaskStatus } from "@/lib/queries";
 import { useTaskNotifications } from "./task-notifications";
 import {
   Send,
@@ -59,34 +60,25 @@ export default function PostGenerator() {
   }, []);
 
   // Poll for task completion when a generate task is in-flight
+  const taskQuery = useTaskStatus(taskId, 3000);
+
   useEffect(() => {
-    if (!taskId) return;
-    const interval = setInterval(async () => {
-      try {
-        const data = await apiGet<{
-          task_id: string;
-          status: string;
-          result?: { draft_id?: string; body?: string; prompt?: string };
-          error?: string;
-        }>(`/api/tasks/${taskId}`);
-        if (data.status === "completed" && data.result) {
-          setDraft(data.result.body || "");
-          setDraftId(data.result.draft_id || null);
-          setIsGenerating(false);
-          setTaskId(null);
-          consumeTask("generate");
-        } else if (data.status === "failed") {
-          setError(data.error || "Generation failed");
-          setIsGenerating(false);
-          setTaskId(null);
-          consumeTask("generate");
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [taskId, consumeTask]);
+    if (!taskId || !taskQuery.data) return;
+    const data = taskQuery.data;
+    if (data.status === "completed" && data.result) {
+      const result = data.result as { draft_id?: string; body?: string; prompt?: string };
+      setDraft(result.body || "");
+      setDraftId(result.draft_id || null);
+      setIsGenerating(false);
+      setTaskId(null);
+      consumeTask("generate");
+    } else if (data.status === "failed") {
+      setError(data.error || "Generation failed");
+      setIsGenerating(false);
+      setTaskId(null);
+      consumeTask("generate");
+    }
+  }, [taskId, taskQuery.data, consumeTask]);
 
   async function handleGenerate() {
     if (!prompt.trim()) return;

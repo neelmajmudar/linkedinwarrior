@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { apiGet, apiPost, apiDelete } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCreatorReports, useDeleteCreatorReport, queryKeys } from "@/lib/queries";
 import { useTaskNotifications } from "./task-notifications";
 import {
   Search,
@@ -97,13 +99,16 @@ export default function CreatorAnalysis() {
   const [compInput, setCompInput] = useState("");
   // Shared state
   const [running, setRunning] = useState(false);
-  const [reports, setReports] = useState<ReportListItem[]>([]);
   const [selectedReport, setSelectedReport] = useState<FullReport | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [expandedCreators, setExpandedCreators] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [pollingId, setPollingId] = useState<string | null>(null);
   const { registerTask, getActiveTask, consumeTask } = useTaskNotifications();
+  const qc = useQueryClient();
+  const reportsQuery = useCreatorReports();
+  const deleteReportMutation = useDeleteCreatorReport();
+  const reports = reportsQuery.data?.reports ?? [];
 
   // On mount: restore from context if a research task is active or completed
   useEffect(() => {
@@ -115,8 +120,6 @@ export default function CreatorAnalysis() {
       // Load the completed report directly if we have the id
       if (reportId) {
         viewReport(reportId);
-      } else {
-        loadReports();
       }
     } else {
       // Still running — restore pollingId so polling resumes
@@ -129,10 +132,6 @@ export default function CreatorAnalysis() {
   }, []);
 
   useEffect(() => {
-    loadReports();
-  }, []);
-
-  useEffect(() => {
     if (!pollingId) return;
     const interval = setInterval(async () => {
       try {
@@ -142,7 +141,7 @@ export default function CreatorAnalysis() {
           setRunning(false);
           setSelectedReport(report);
           consumeTask("research");
-          loadReports();
+          qc.invalidateQueries({ queryKey: queryKeys.creatorReports });
         }
       } catch {
         // ignore
@@ -151,14 +150,6 @@ export default function CreatorAnalysis() {
     return () => clearInterval(interval);
   }, [pollingId, consumeTask]);
 
-  async function loadReports() {
-    try {
-      const data = await apiGet<{ reports: ReportListItem[] }>("/api/creator-analysis/reports");
-      setReports(data.reports || []);
-    } catch {
-      // ignore
-    }
-  }
 
   async function startCreatorAnalysis() {
     if (!niche.trim() && creatorUrls.length === 0) { setError("Enter a niche/keywords or add at least one creator URL."); return; }
@@ -207,13 +198,12 @@ export default function CreatorAnalysis() {
     setLoadingReport(false);
   }
 
-  async function deleteReport(reportId: string) {
-    try {
-      await apiDelete(`/api/creator-analysis/reports/${reportId}`);
-      setReports((prev) => prev.filter((r) => r.id !== reportId));
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to delete report");
-    }
+  function deleteReport(reportId: string) {
+    deleteReportMutation.mutate(reportId, {
+      onError: (err) => {
+        setError(err instanceof Error ? err.message : "Failed to delete report");
+      },
+    });
   }
 
   function addUrl() {
