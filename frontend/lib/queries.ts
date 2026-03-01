@@ -19,6 +19,11 @@ export const queryKeys = {
   creatorReports: ["creator-reports"] as const,
   creatorReport: (id: string) => ["creator-report", id] as const,
   taskStatus: (id: string) => ["task", id] as const,
+  gmailStatus: ["gmail-status"] as const,
+  emailInbox: (page: number, category?: string) =>
+    ["email", "inbox", page, category] as const,
+  emailDetail: (id: string) => ["email", "detail", id] as const,
+  emailAutoSend: ["email", "auto-send"] as const,
 };
 
 // ── Persona / Onboarding ──
@@ -352,5 +357,147 @@ export function useTaskStatus(taskId: string | null, interval = 3000) {
     enabled: !!taskId,
     refetchInterval: interval,
     refetchIntervalInBackground: true,
+  });
+}
+
+// ── Email / Gmail ──
+
+export function useGmailStatus() {
+  return useQuery({
+    queryKey: queryKeys.gmailStatus,
+    queryFn: () =>
+      apiGet<{ connected: boolean; email_address: string | null }>(
+        "/api/email/status"
+      ),
+    retry: false,
+  });
+}
+
+interface EmailInboxItem {
+  id: string;
+  from_name: string | null;
+  from_email: string;
+  to_email: string | null;
+  subject: string | null;
+  category: string | null;
+  action_items: { item: string; due: string | null; priority: string }[] | null;
+  priority: string | null;
+  status: string;
+  auto_reply_eligible: boolean;
+  has_attachments: boolean;
+  received_at: string | null;
+  created_at: string | null;
+}
+
+interface EmailInboxResponse {
+  items: EmailInboxItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+}
+
+export function useEmailInbox(
+  page: number,
+  pageSize = 20,
+  category?: string
+) {
+  return useQuery({
+    queryKey: queryKeys.emailInbox(page, category),
+    queryFn: () => {
+      let url = `/api/email/inbox?page=${page}&page_size=${pageSize}`;
+      if (category) url += `&category=${category}`;
+      return apiGet<EmailInboxResponse>(url);
+    },
+  });
+}
+
+interface EmailDraft {
+  id: string;
+  email_id: string;
+  subject: string | null;
+  body: string;
+  status: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface EmailDetailData extends EmailInboxItem {
+  body_text: string | null;
+  draft: EmailDraft | null;
+}
+
+export function useEmailDetail(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.emailDetail(id || ""),
+    queryFn: () => apiGet<EmailDetailData>(`/api/email/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useEmailAutoSendPreferences() {
+  return useQuery({
+    queryKey: queryKeys.emailAutoSend,
+    queryFn: () =>
+      apiGet<{ auto_send_categories: string[] }>(
+        "/api/email/preferences/auto-send"
+      ),
+  });
+}
+
+export function useSaveEmailAutoSend() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (categories: string[]) =>
+      apiPost("/api/email/preferences/auto-send", { categories }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.emailAutoSend });
+    },
+  });
+}
+
+export function useSendEmailReply() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (emailId: string) => apiPost(`/api/email/${emailId}/send`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email"] });
+    },
+  });
+}
+
+export function useEditEmailDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      emailId,
+      body,
+    }: {
+      emailId: string;
+      body: { body?: string; subject?: string };
+    }) => apiPatch(`/api/email/${emailId}/draft`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email"] });
+    },
+  });
+}
+
+export function useReprocessEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (emailId: string) => apiPost(`/api/email/${emailId}/reprocess`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email"] });
+    },
+  });
+}
+
+export function useReprocessAllEmails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost("/api/email/reprocess-all"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email"] });
+    },
   });
 }
