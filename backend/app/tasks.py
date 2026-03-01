@@ -350,3 +350,168 @@ def purge_old_history():
         logger.error("[task] Failed to purge creator_reports: %s", e)
 
     return {"cutoff": cutoff}
+
+
+# ---------------------------------------------------------------------------
+# Task: Purge expired emails (older than 48 hours)
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    bind=True,
+    name="app.tasks.purge_expired_emails",
+    max_retries=1,
+    default_retry_delay=60,
+)
+def purge_expired_emails(self):
+    """Delete emails (and cascade to drafts) whose expires_at has passed."""
+    db = _get_db()
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+        result = db.table("emails") \
+            .delete() \
+            .lt("expires_at", now) \
+            .execute()
+        count = len(result.data) if result.data else 0
+        logger.info("[task] Purged %d expired emails (before %s)", count, now)
+        return {"purged": count, "cutoff": now}
+    except Exception as e:
+        logger.error("[task] Failed to purge expired emails: %s", e)
+        raise self.retry(exc=e)
+
+
+# ---------------------------------------------------------------------------
+# Task: Process an incoming email through the AI agent
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    bind=True,
+    name="app.tasks.process_email_task",
+    max_retries=3,
+    default_retry_delay=30,
+    rate_limit="20/m",
+    acks_late=True,
+)
+def process_email_task(self, email_id: str, user_id: str,
+                       subject: str, body: str, from_name: str, from_email: str):
+    """Process an incoming email: classify, extract action items, generate reply draft.
+
+    Runs the LangGraph email_responder agent synchronously via asyncio.
+    On failure, retries with exponential backoff (30s, 60s, 120s).
+    """
+    import asyncio
+
+    db = _get_db()
+
+    # Mark as processing
+    db.table("emails").update({
+        "status": "processing",
+    }).eq("id", email_id).execute()
+
+    try:
+        from app.agents.email_responder import process_email
+
+        result = asyncio.run(process_email(
+            user_id=user_id,
+            email_id=email_id,
+            email_subject=subject,
+            email_body=body,
+            from_name=from_name,
+            from_email=from_email,
+        ))
+
+        logger.info(
+            "[task] Processed email %s for user %s — category: %s",
+            email_id, user_id, result.get("category"),
+        )
+
+        # Check if auto-send is enabled for this category
+        if not result.get("should_skip", False):
+            _maybe_auto_send(db, email_id, user_id, result.get("category", ""))
+
+        return {"email_id": email_id, "category": result.get("category")}
+
+    except Exception as exc:
+        logger.error("[task] Failed to process email %s: %s", email_id, exc)
+
+        if self.request.retries >= self.max_retries:
+            db.table("emails").update({
+                "status": "new",
+            }).eq("id", email_id).execute()
+            raise
+
+        raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
+
+
+def _maybe_auto_send(db: Client, email_id: str, user_id: str, category: str):
+    """If the user has auto-send enabled for this category, send the reply."""
+    user_result = db.table("users") \
+        .select("email_auto_send_categories") \
+        .eq("id", user_id).execute()
+
+    if not user_result.data:
+        return
+
+    auto_categories = user_result.data[0].get("email_auto_send_categories") or []
+    if category not in auto_categories:
+        return
+
+    # Get the draft
+    draft_result = db.table("email_drafts") \
+        .select("id, subject, body") \
+        .eq("email_id", email_id) \
+        .eq("user_id", user_id) \
+        .eq("status", "draft") \
+        .order("created_at", desc=True) \
+        .limit(1) \
+        .execute()
+
+    if not draft_result.data:
+        return
+
+    draft = draft_result.data[0]
+
+    # Get email details
+    email_result = db.table("emails") \
+        .select("unipile_email_id, from_name, from_email, email_account_id") \
+        .eq("id", email_id).execute()
+
+    if not email_result.data:
+        return
+
+    email_data = email_result.data[0]
+
+    acct_result = db.table("email_accounts") \
+        .select("unipile_account_id") \
+        .eq("id", email_data["email_account_id"]).execute()
+
+    if not acct_result.data:
+        return
+
+    account_id = acct_result.data[0]["unipile_account_id"]
+
+    try:
+        from app.services.email_service import send_email_reply_sync
+
+        send_email_reply_sync(
+            account_id=account_id,
+            reply_to_email_id=email_data["unipile_email_id"],
+            to_email=email_data["from_email"],
+            to_name=email_data.get("from_name") or "",
+            subject=draft["subject"],
+            body=draft["body"],
+        )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        db.table("email_drafts").update({
+            "status": "sent",
+            "updated_at": now_iso,
+        }).eq("id", draft["id"]).execute()
+
+        db.table("emails").update({
+            "status": "replied",
+        }).eq("id", email_id).execute()
+
+        logger.info("[task] Auto-sent reply for email %s (category: %s)", email_id, category)
+    except Exception as e:
+        logger.error("[task] Auto-send failed for email %s: %s", email_id, e)

@@ -129,6 +129,25 @@ async def _purge_old_history_legacy():
         print(f"[scheduler] Failed to purge creator_reports: {e}")
 
 
+async def _purge_expired_emails_legacy():
+    """Delete emails (and cascade to drafts) whose 48-hour expiration has passed."""
+    from app.db import get_supabase
+
+    db = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+
+    try:
+        result = db.table("emails") \
+            .delete() \
+            .lt("expires_at", now) \
+            .execute()
+        count = len(result.data) if result.data else 0
+        if count:
+            print(f"[scheduler] Purged {count} expired emails (before {now})")
+    except Exception as e:
+        print(f"[scheduler] Failed to purge expired emails: {e}")
+
+
 def _start_apscheduler():
     global _apscheduler
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -140,6 +159,8 @@ def _start_apscheduler():
                          id="daily_analytics_snapshot", replace_existing=True)
     _apscheduler.add_job(_purge_old_history_legacy, "interval", hours=6,
                          id="purge_old_history", replace_existing=True)
+    _apscheduler.add_job(_purge_expired_emails_legacy, "interval", hours=1,
+                         id="purge_expired_emails", replace_existing=True)
     _apscheduler.start()
 
 

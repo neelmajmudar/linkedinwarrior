@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ImagePlus,
   X,
+  CalendarDays,
 } from "lucide-react";
 
 interface ContentItem {
@@ -65,6 +66,9 @@ export default function ContentList() {
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [editScheduleEnabled, setEditScheduleEnabled] = useState(false);
+  const [editScheduleDate, setEditScheduleDate] = useState("");
+  const [editScheduleTime, setEditScheduleTime] = useState("");
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
@@ -113,7 +117,11 @@ export default function ContentList() {
   async function handleSaveEdit(id: string) {
     setActionLoading(id);
     try {
-      await apiPatch(`/api/content/${id}`, { body: editBody });
+      const payload: Record<string, unknown> = { body: editBody };
+      if (editScheduleEnabled && editScheduleDate && editScheduleTime) {
+        payload.scheduled_at = `${editScheduleDate}T${editScheduleTime}:00`;
+      }
+      await apiPatch(`/api/content/${id}`, payload);
       // Upload image if one was selected
       if (editImageFile) {
         await uploadEditImage(id);
@@ -121,6 +129,9 @@ export default function ContentList() {
       setEditingId(null);
       setEditImageFile(null);
       setEditImagePreview(null);
+      setEditScheduleEnabled(false);
+      setEditScheduleDate("");
+      setEditScheduleTime("");
       if (editFileInputRef.current) editFileInputRef.current.value = "";
       invalidateContent();
     } catch {
@@ -273,6 +284,42 @@ export default function ContentList() {
               </button>
             )}
 
+            {/* Schedule date/time */}
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 select-none">
+                <input
+                  type="checkbox"
+                  checked={editScheduleEnabled}
+                  onChange={(e) => {
+                    setEditScheduleEnabled(e.target.checked);
+                    if (e.target.checked && !editScheduleDate) {
+                      setEditScheduleDate(format(new Date(), "yyyy-MM-dd"));
+                      setEditScheduleTime("09:00");
+                    }
+                  }}
+                  className="rounded border-gray-300 text-warm-600 focus:ring-warm-500"
+                />
+                <CalendarDays className="h-3.5 w-3.5" />
+                Schedule
+              </label>
+              {editScheduleEnabled && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={editScheduleDate}
+                    onChange={(e) => setEditScheduleDate(e.target.value)}
+                    className="input-field px-2 py-1 text-xs"
+                  />
+                  <input
+                    type="time"
+                    value={editScheduleTime}
+                    onChange={(e) => setEditScheduleTime(e.target.value)}
+                    className="input-field px-2 py-1 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={() => handleSaveEdit(item.id)}
@@ -291,6 +338,9 @@ export default function ContentList() {
                   setEditingId(null);
                   setEditImageFile(null);
                   setEditImagePreview(null);
+                  setEditScheduleEnabled(false);
+                  setEditScheduleDate("");
+                  setEditScheduleTime("");
                   if (editFileInputRef.current) editFileInputRef.current.value = "";
                 }}
                 className="btn-ghost px-3 py-1.5 text-xs flex items-center gap-1 border border-gray-200 rounded-full"
@@ -344,6 +394,16 @@ export default function ContentList() {
                 setEditBody(item.body);
                 setEditImageFile(null);
                 setEditImagePreview(null);
+                if (item.scheduled_at) {
+                  const d = new Date(item.scheduled_at);
+                  setEditScheduleEnabled(true);
+                  setEditScheduleDate(format(d, "yyyy-MM-dd"));
+                  setEditScheduleTime(format(d, "HH:mm"));
+                } else {
+                  setEditScheduleEnabled(false);
+                  setEditScheduleDate("");
+                  setEditScheduleTime("");
+                }
               }}
               className="btn-ghost px-2.5 py-1 text-xs flex items-center gap-1 border border-gray-200 rounded-full"
             >

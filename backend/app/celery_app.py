@@ -44,6 +44,7 @@ celery.conf.update(
     task_routes={
         "app.tasks.publish_post_task": {"queue": "publishing"},
         "app.tasks.analytics_snapshot_task": {"queue": "analytics"},
+        "app.tasks.process_email_task": {"queue": "email"},
         "app.tasks.*": {"queue": "default"},
     },
 
@@ -60,6 +61,10 @@ celery.conf.update(
         "purge-old-history-every-6h": {
             "task": "app.tasks.purge_old_history",
             "schedule": crontab(minute=0, hour="*/6"),
+        },
+        "purge-expired-emails-hourly": {
+            "task": "app.tasks.purge_expired_emails",
+            "schedule": crontab(minute=30, hour="*"),
         },
     },
 )

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { apiPost } from "@/lib/api";
-import { usePersona, useLinkedinStatus } from "@/lib/queries";
+import { usePersona, useLinkedinStatus, useGmailStatus } from "@/lib/queries";
 import dynamic from "next/dynamic";
 import { TaskNotificationProvider, useTaskNotifications } from "@/components/task-notifications";
 import type { Session } from "@supabase/supabase-js";
@@ -20,6 +20,7 @@ import {
   BarChart3,
   Loader2,
   Sparkles,
+  Mail,
 } from "lucide-react";
 
 const AuthPage = dynamic(() => import("@/components/auth-page"), {
@@ -56,6 +57,7 @@ const tabs = [
   { id: "engage", label: "Engage", icon: MessageSquare, href: "/dashboard/engage" },
   { id: "research", label: "Research", icon: Sparkles, href: "/dashboard/research" },
   { id: "analytics", label: "Analytics", icon: BarChart3, href: "/dashboard/analytics" },
+  { id: "email", label: "Email", icon: Mail, href: "/dashboard/email" },
 ];
 
 // ── Auth hook ──
@@ -144,7 +146,7 @@ function DashboardSkeleton() {
       </header>
       <nav className="border-b border-gray-200 px-6 bg-white">
         <div className="max-w-4xl mx-auto flex gap-1 py-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="skeleton h-5 w-20 rounded" />
           ))}
         </div>
@@ -168,9 +170,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const { setNavigateTo } = useTaskNotifications();
   const personaQuery = usePersona();
   const linkedinQuery = useLinkedinStatus();
+  const gmailQuery = useGmailStatus();
   const [connecting, setConnecting] = useState(false);
 
   const linkedinConnected = linkedinQuery.data?.connected ?? false;
+  const gmailConnected = gmailQuery.data?.connected ?? false;
 
   // Derive onboarding status — memo to avoid re-render jitter
   const onboardingStatus = useMemo<"loading" | "needed" | "done">(() => {
@@ -287,6 +291,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               )}
               {connecting ? "Connecting…" : "Connect LinkedIn"}
             </button>
+          )}
+          {gmailConnected && (
+            <div className="flex items-center gap-1.5 text-sm">
+              <Mail className="h-4 w-4 text-green-600" />
+              <span className="text-green-700 font-medium">Gmail</span>
+            </div>
           )}
           <button
             onClick={() => supabase.auth.signOut()}

@@ -89,3 +89,74 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int
     page_size: int
     has_next: bool
+
+
+# --- Email models ---
+
+class GmailStatus(BaseModel):
+    connected: bool
+    email_address: Optional[str] = None
+
+
+class EmailActionItem(BaseModel):
+    item: str
+    due: Optional[str] = None
+    priority: str = "medium"
+
+
+class EmailItem(BaseModel):
+    id: str
+    from_name: Optional[str] = None
+    from_email: str
+    to_email: Optional[str] = None
+    subject: Optional[str] = None
+    category: Optional[str] = None
+    action_items: Optional[List[EmailActionItem]] = None
+    priority: Optional[str] = None
+    status: str
+    auto_reply_eligible: bool = False
+    has_attachments: bool = False
+    received_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EmailDraft(BaseModel):
+    id: str
+    email_id: str
+    subject: Optional[str] = None
+    body: str
+    status: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EmailDetailResponse(BaseModel):
+    id: str
+    from_name: Optional[str] = None
+    from_email: str
+    to_email: Optional[str] = None
+    subject: Optional[str] = None
+    body_text: Optional[str] = None
+    category: Optional[str] = None
+    action_items: Optional[List[EmailActionItem]] = None
+    priority: Optional[str] = None
+    status: str
+    auto_reply_eligible: bool = False
+    has_attachments: bool = False
+    received_at: Optional[str] = None
+    draft: Optional[EmailDraft] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EditDraftRequest(BaseModel):
+    body: Optional[str] = None
+    subject: Optional[str] = None
+
+
+class AutoSendPreferences(BaseModel):
+    categories: List[str] = []
