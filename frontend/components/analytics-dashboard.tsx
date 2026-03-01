@@ -1,6 +1,12 @@
 "use client";
 
-import { useAnalytics, useRefreshAnalytics } from "@/lib/queries";
+import { useState } from "react";
+import {
+  useAnalytics,
+  useRefreshAnalytics,
+  usePostInteractions,
+  useSendConnectionRequest,
+} from "@/lib/queries";
 import {
   LineChart,
   Line,
@@ -24,6 +30,12 @@ import {
   Repeat2,
   RefreshCw,
   Loader2,
+  ExternalLink,
+  UserCircle,
+  UserPlus,
+  Check,
+  AlertCircle,
+  X,
 } from "lucide-react";
 
 interface MetricTrend {
@@ -59,9 +71,204 @@ interface AnalyticsData {
   metric_trends: MetricTrend[];
 }
 
+function InteractionBadge({ type }: { type: string }) {
+  if (type === "both")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700">
+        <Heart className="h-2.5 w-2.5" />
+        <MessageSquare className="h-2.5 w-2.5" />
+        Both
+      </span>
+    );
+  if (type === "comment")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">
+        <MessageSquare className="h-2.5 w-2.5" />
+        Comment
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warm-50 text-warm-700">
+      <Heart className="h-2.5 w-2.5" />
+      Reaction
+    </span>
+  );
+}
+
+function ConnectButton({ providerId }: { providerId: string }) {
+  const connectMutation = useSendConnectionRequest();
+  const [sent, setSent] = useState(false);
+
+  if (sent || connectMutation.isSuccess)
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-green-600 font-medium px-2 py-1">
+        <Check className="h-3 w-3" /> Sent
+      </span>
+    );
+
+  if (connectMutation.isError)
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-red-500 font-medium px-2 py-1" title={String(connectMutation.error)}>
+        <AlertCircle className="h-3 w-3" /> Failed
+      </span>
+    );
+
+  return (
+    <button
+      onClick={() => {
+        connectMutation.mutate({ provider_id: providerId }, { onSuccess: () => setSent(true) });
+      }}
+      disabled={connectMutation.isPending || !providerId}
+      className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full border border-warm-300 text-warm-700 hover:bg-warm-50 transition-colors disabled:opacity-40"
+    >
+      {connectMutation.isPending ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <UserPlus className="h-3 w-3" />
+      )}
+      Connect
+    </button>
+  );
+}
+
+function PostInteractionsSection({
+  postId,
+  postText,
+  onClose,
+}: {
+  postId: string;
+  postText: string;
+  onClose: () => void;
+}) {
+  const { data, isLoading, isError, error } = usePostInteractions(postId);
+
+  const profiles = data?.profiles || [];
+  const hasError = data?.error || data?.api_errors?.length;
+
+  return (
+    <div className="glass-card p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="h-4 w-4 text-warm-500 flex-shrink-0" />
+            <h3 className="text-sm font-medium text-[#1a1a1a]">Post Interactions</h3>
+          </div>
+          <p className="text-xs text-gray-400 truncate max-w-md">
+            {postText || "Selected post"}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-warm-500" />
+          <span className="ml-2 text-sm text-gray-400">Fetching interaction data...</span>
+        </div>
+      )}
+
+      {isError && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-600 text-xs">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>Failed to load interactions: {(error as Error)?.message || "Unknown error"}</span>
+        </div>
+      )}
+
+      {!isLoading && hasError && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 text-amber-700 text-xs">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{data?.error || data?.api_errors?.join("; ")}</span>
+        </div>
+      )}
+
+      {!isLoading && !isError && profiles.length === 0 && !hasError && (
+        <div className="py-6 text-center text-sm text-gray-400">
+          No interaction data available for this post.
+        </div>
+      )}
+
+      {profiles.length > 0 && (
+        <>
+          <div className="flex items-center gap-4 text-xs text-gray-500">
+            <span className="flex items-center gap-1">
+              <Heart className="h-3 w-3 text-warm-500" />
+              {data?.total_reactors ?? 0} reactors
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageSquare className="h-3 w-3 text-blue-500" />
+              {data?.total_commenters ?? 0} commenters
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3 text-gray-400" />
+              {profiles.length} unique
+            </span>
+          </div>
+
+          <div className="max-h-[420px] overflow-y-auto space-y-1 pr-1">
+            {profiles.map((profile) => (
+              <div
+                key={profile.id}
+                className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors group"
+              >
+                {profile.profile_picture_url ? (
+                  <img
+                    src={profile.profile_picture_url}
+                    alt={profile.name || "Profile"}
+                    className="h-9 w-9 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <UserCircle className="h-9 w-9 text-gray-300 flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {profile.profile_url ? (
+                      <a
+                        href={profile.profile_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-[#1a1a1a] hover:text-warm-600 truncate flex items-center gap-1"
+                      >
+                        {profile.name || "LinkedIn User"}
+                        <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      </a>
+                    ) : (
+                      <span className="text-xs font-medium text-[#1a1a1a] truncate">
+                        {profile.name || "LinkedIn User"}
+                      </span>
+                    )}
+                    <InteractionBadge type={profile.interaction_type} />
+                  </div>
+                  {profile.headline && (
+                    <p className="text-[11px] text-gray-400 truncate">{profile.headline}</p>
+                  )}
+                  {profile.comment_text && (
+                    <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 italic">
+                      &ldquo;{profile.comment_text}&rdquo;
+                    </p>
+                  )}
+                </div>
+                <div className="flex-shrink-0">
+                  <ConnectButton providerId={profile.provider_id} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AnalyticsDashboard() {
   const { data, isLoading } = useAnalytics();
   const refreshMutation = useRefreshAnalytics();
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedPostText, setSelectedPostText] = useState<string>("");
 
   if (isLoading) {
     return (
@@ -90,7 +297,12 @@ export default function AnalyticsDashboard() {
     ? [{ date: '', followers: 0 }, ...followerData]
     : followerData;
 
-  const postData = (data?.top_posts || [])
+  // Posts are already sorted by views (impressions) from the backend
+  const sortedPosts = [...(data?.top_posts || [])].sort(
+    (a, b) => b.impressions - a.impressions
+  );
+
+  const postData = sortedPosts
     .slice(0, 10)
     .map((p, i) => ({
       name: `Post ${i + 1}`,
@@ -330,14 +542,22 @@ export default function AnalyticsDashboard() {
         </div>
       )}
 
-      {/* Top posts table */}
-      {(data?.top_posts || []).length > 0 && (
+      {/* Top posts table — sorted by views */}
+      {sortedPosts.length > 0 && (
         <div className="glass-card p-5 space-y-3">
-          <h3 className="text-sm font-medium text-[#1a1a1a]">Top Performing Posts</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-[#1a1a1a]">Top Performing Posts</h3>
+            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+              <Eye className="h-3 w-3" /> Sorted by views &middot; Click a row to view interactions
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200">
+                  <th className="text-left py-2 px-2 text-xs font-medium text-gray-500 w-6">
+                    #
+                  </th>
                   <th className="text-left py-2 px-2 text-xs font-medium text-gray-500">
                     Post
                   </th>
@@ -356,34 +576,65 @@ export default function AnalyticsDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {(data?.top_posts || []).map((post) => (
-                  <tr
-                    key={post.id}
-                    className="border-b border-gray-100 last:border-0"
-                  >
-                    <td className="py-2 px-2 max-w-[250px]">
-                      <p className="truncate text-[#1a1a1a]">
-                        {post.post_text || "—"}
-                      </p>
-                    </td>
-                    <td className="text-right py-2 px-2 tabular-nums">
-                      {post.impressions.toLocaleString()}
-                    </td>
-                    <td className="text-right py-2 px-2 tabular-nums">
-                      {post.reactions.toLocaleString()}
-                    </td>
-                    <td className="text-right py-2 px-2 tabular-nums">
-                      {post.comments.toLocaleString()}
-                    </td>
-                    <td className="text-right py-2 px-2 tabular-nums">
-                      {post.reposts.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                {sortedPosts.map((post, idx) => {
+                  const isSelected = selectedPostId === post.linkedin_post_id;
+                  return (
+                    <tr
+                      key={post.id}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedPostId(null);
+                          setSelectedPostText("");
+                        } else {
+                          setSelectedPostId(post.linkedin_post_id);
+                          setSelectedPostText(post.post_text || "");
+                        }
+                      }}
+                      className={`border-b border-gray-100 last:border-0 cursor-pointer transition-colors ${
+                        isSelected
+                          ? "bg-warm-50/60 border-l-2 border-l-warm-400"
+                          : "hover:bg-gray-50/50"
+                      }`}
+                    >
+                      <td className="py-2 px-2 text-xs text-gray-400 tabular-nums">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-2 max-w-[250px]">
+                        <p className="truncate text-[#1a1a1a]">
+                          {post.post_text || "—"}
+                        </p>
+                      </td>
+                      <td className="text-right py-2 px-2 tabular-nums font-medium">
+                        {post.impressions.toLocaleString()}
+                      </td>
+                      <td className="text-right py-2 px-2 tabular-nums">
+                        {post.reactions.toLocaleString()}
+                      </td>
+                      <td className="text-right py-2 px-2 tabular-nums">
+                        {post.comments.toLocaleString()}
+                      </td>
+                      <td className="text-right py-2 px-2 tabular-nums">
+                        {post.reposts.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
+      )}
+
+      {/* Post Interactions — dedicated section */}
+      {selectedPostId && (
+        <PostInteractionsSection
+          postId={selectedPostId}
+          postText={selectedPostText}
+          onClose={() => {
+            setSelectedPostId(null);
+            setSelectedPostText("");
+          }}
+        />
       )}
 
       {/* Empty state */}
