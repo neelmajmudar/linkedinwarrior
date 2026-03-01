@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from app.auth import get_current_user
 from app.db import get_supabase
 from app.services.analytics import (
@@ -8,7 +9,14 @@ from app.services.analytics import (
     get_post_performance_count,
     get_engagement_summary,
     get_metric_trends,
+    get_post_interacting_profiles,
+    send_connection_request,
 )
+
+
+class ConnectionRequestBody(BaseModel):
+    provider_id: str
+    message: str = ""
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -69,11 +77,36 @@ async def get_posts_analytics(
     }
 
 
+@router.get("/posts/{linkedin_post_id}/interactions")
+async def get_post_interactions(
+    linkedin_post_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get all profiles that interacted with a post (reactions + comments).
+
+    Returns profiles even when partial errors occur (e.g. reactions API fails
+    but comments succeed). The `error` and `api_errors` fields signal issues
+    to the frontend without breaking the entire request.
+    """
+    return await get_post_interacting_profiles(user["id"], linkedin_post_id)
+
+
+@router.post("/connect")
+async def send_connect_request(
+    body: ConnectionRequestBody,
+    user: dict = Depends(get_current_user),
+):
+    """Send a LinkedIn connection request to a profile via Unipile."""
+    result = await send_connection_request(user["id"], body.provider_id, body.message)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
 @router.post("/refresh")
 async def refresh_analytics(user: dict = Depends(get_current_user)):
     """Manually trigger an analytics snapshot (fetches latest data from Unipile)."""
     result = await take_snapshot(user["id"])
     if "error" in result:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=result["error"])
     return result

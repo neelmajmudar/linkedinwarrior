@@ -15,6 +15,7 @@ export const queryKeys = {
   engagementHistory: (page: number) => ["engagement", "history", page] as const,
   engagementHistoryCount: ["engagement", "history-count"] as const,
   analytics: ["analytics"] as const,
+  postInteractions: (postId: string) => ["post-interactions", postId] as const,
   creatorReports: ["creator-reports"] as const,
   creatorReport: (id: string) => ["creator-report", id] as const,
   taskStatus: (id: string) => ["task", id] as const,
@@ -224,6 +225,44 @@ export function useRefreshAnalytics() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.analytics });
     },
+  });
+}
+
+interface InteractingProfile {
+  id: string;
+  provider_id: string;
+  name: string;
+  headline: string;
+  profile_url: string;
+  profile_picture_url: string;
+  interaction_type: "reaction" | "comment" | "both";
+  reaction_type?: string;
+  comment_text?: string;
+}
+
+interface PostInteractionsData {
+  profiles: InteractingProfile[];
+  total_reactors: number;
+  total_commenters: number;
+  error?: string;
+  api_errors?: string[];
+}
+
+export function usePostInteractions(postId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.postInteractions(postId || ""),
+    queryFn: () =>
+      apiGet<PostInteractionsData>(
+        `/api/analytics/posts/${postId}/interactions`
+      ),
+    enabled: !!postId,
+  });
+}
+
+export function useSendConnectionRequest() {
+  return useMutation({
+    mutationFn: (body: { provider_id: string; message?: string }) =>
+      apiPost("/api/analytics/connect", body),
   });
 }
 

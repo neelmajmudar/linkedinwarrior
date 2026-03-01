@@ -1,6 +1,8 @@
 """Service for fetching LinkedIn analytics from Unipile and storing snapshots."""
 
+import asyncio
 from datetime import date
+from urllib.parse import quote
 
 import httpx
 from app.config import settings
@@ -184,7 +186,193 @@ def get_post_performance(user_id: str, limit: int = 20, offset: int = 0) -> list
             seen.add(pid)
             unique.append(row)
 
+    # Sort by impressions (views) descending so top posts = most viewed
+    unique.sort(key=lambda r: r.get("impressions", 0), reverse=True)
+
     return unique[offset: offset + limit]
+
+
+async def fetch_post_reactions(account_id: str, social_id: str, limit: int = 100) -> list[dict]:
+    """Fetch reactions on a post from Unipile. Returns list of reaction objects with author info."""
+    encoded_id = quote(social_id, safe="")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{settings.UNIPILE_DSN}/api/v1/posts/{encoded_id}/reactions",
+            headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+            params={"account_id": account_id, "limit": limit},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"[analytics] Reactions response keys: {list(data.keys()) if isinstance(data, dict) else 'list'}")
+        return data.get("items", []) if isinstance(data, dict) else data
+
+
+async def fetch_post_comments(account_id: str, social_id: str, limit: int = 100) -> list[dict]:
+    """Fetch comments on a post from Unipile. Returns list of comment objects with author info."""
+    encoded_id = quote(social_id, safe="")
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{settings.UNIPILE_DSN}/api/v1/posts/{encoded_id}/comments",
+            headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+            params={"account_id": account_id, "limit": limit},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        print(f"[analytics] Comments response keys: {list(data.keys()) if isinstance(data, dict) else 'list'}")
+        return data.get("items", []) if isinstance(data, dict) else data
+
+
+def _normalize_author(raw_author) -> dict:
+    """Ensure author is always a dict. Unipile may return a plain string ID."""
+    if isinstance(raw_author, dict):
+        return raw_author
+    if isinstance(raw_author, str) and raw_author:
+        return {"id": raw_author, "provider_id": raw_author}
+    return {}
+
+
+def _extract_profile(raw_author, interaction_type: str, extra: dict | None = None) -> dict:
+    """Normalize an author object from reactions or comments into a profile dict."""
+    author = _normalize_author(raw_author)
+    author_id = author.get("id") or author.get("provider_id") or ""
+    profile = {
+        "id": author_id,
+        "provider_id": author.get("provider_id") or author.get("id") or "",
+        "name": author.get("name") or author.get("full_name") or "",
+        "headline": author.get("headline") or "",
+        "profile_url": author.get("public_profile_url") or (
+            f"https://www.linkedin.com/in/{author.get('public_identifier')}"
+            if author.get("public_identifier") else ""
+        ),
+        "profile_picture_url": author.get("profile_picture_url") or author.get("profile_pic_url") or "",
+        "interaction_type": interaction_type,
+    }
+    if extra:
+        profile.update(extra)
+    return profile
+
+
+async def get_post_interacting_profiles(user_id: str, linkedin_post_id: str) -> dict:
+    """Get all profiles that interacted with a post via reactions or comments.
+
+    Returns a dict with reactors, commenters, and a unified deduplicated list.
+    """
+    db = get_supabase()
+
+    # Look up the social_id and account_id for this post
+    post_result = db.table("post_analytics") \
+        .select("social_id") \
+        .eq("user_id", user_id) \
+        .eq("linkedin_post_id", linkedin_post_id) \
+        .limit(1) \
+        .execute()
+
+    if not post_result.data:
+        return {"profiles": [], "total_reactors": 0, "total_commenters": 0, "error": "Post not found in analytics"}
+
+    social_id = (post_result.data[0].get("social_id") or "").strip()
+    if not social_id:
+        return {"profiles": [], "total_reactors": 0, "total_commenters": 0, "error": "Post is missing social_id — try refreshing analytics"}
+
+    user_result = db.table("users").select("unipile_account_id").eq("id", user_id).execute()
+    if not user_result.data or not user_result.data[0].get("unipile_account_id"):
+        return {"profiles": [], "total_reactors": 0, "total_commenters": 0, "error": "LinkedIn not connected"}
+
+    account_id = user_result.data[0]["unipile_account_id"]
+
+    # Fetch reactions and comments in parallel; capture errors per-source
+    reactions: list[dict] = []
+    comments: list[dict] = []
+    errors: list[str] = []
+
+    results = await asyncio.gather(
+        fetch_post_reactions(account_id, social_id),
+        fetch_post_comments(account_id, social_id),
+        return_exceptions=True,
+    )
+
+    if isinstance(results[0], BaseException):
+        errors.append(f"Reactions API error: {results[0]}")
+        print(f"[analytics] Reactions API error for {social_id}: {results[0]}")
+    else:
+        reactions = results[0]
+
+    if isinstance(results[1], BaseException):
+        errors.append(f"Comments API error: {results[1]}")
+        print(f"[analytics] Comments API error for {social_id}: {results[1]}")
+    else:
+        comments = results[1]
+
+    # Build profile list from reactions
+    seen_ids: set[str] = set()
+    profiles: list[dict] = []
+
+    for r in reactions:
+        author = _normalize_author(r.get("author"))
+        author_id = author.get("id") or author.get("provider_id") or ""
+        if not author_id or author_id in seen_ids:
+            continue
+        seen_ids.add(author_id)
+        profiles.append(_extract_profile(author, "reaction", {"reaction_type": r.get("value", "LIKE")}))
+
+    # Build profile list from comments
+    for c in comments:
+        author = _normalize_author(c.get("author"))
+        author_id = author.get("id") or author.get("provider_id") or ""
+        if not author_id:
+            continue
+        if author_id in seen_ids:
+            for p in profiles:
+                if p["id"] == author_id:
+                    p["interaction_type"] = "both"
+                    p["comment_text"] = (c.get("text") or "")[:200]
+                    break
+            continue
+        seen_ids.add(author_id)
+        profiles.append(_extract_profile(author, "comment", {"comment_text": (c.get("text") or "")[:200]}))
+
+    result: dict = {
+        "profiles": profiles,
+        "total_reactors": len(reactions),
+        "total_commenters": len(comments),
+    }
+    if errors:
+        result["api_errors"] = errors
+    return result
+
+
+async def send_connection_request(user_id: str, provider_id: str, message: str = "") -> dict:
+    """Send a LinkedIn connection request via Unipile POST /api/v1/users/invite."""
+    db = get_supabase()
+    user_result = db.table("users").select("unipile_account_id").eq("id", user_id).execute()
+    if not user_result.data or not user_result.data[0].get("unipile_account_id"):
+        return {"error": "LinkedIn not connected"}
+
+    account_id = user_result.data[0]["unipile_account_id"]
+    body: dict = {"provider_id": provider_id, "account_id": account_id}
+    if message:
+        body["message"] = message[:300]
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{settings.UNIPILE_DSN}/api/v1/users/invite",
+                headers={"X-API-KEY": settings.UNIPILE_API_KEY},
+                json=body,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.HTTPStatusError as e:
+        detail = ""
+        try:
+            detail = e.response.json().get("detail", e.response.text)
+        except Exception:
+            detail = e.response.text
+        print(f"[analytics] Connection request failed: {e} — {detail}")
+        return {"error": f"Connection request failed: {detail}"}
+    except Exception as e:
+        print(f"[analytics] Connection request error: {e}")
+        return {"error": str(e)}
 
 
 def get_metric_trends(user_id: str, days: int = 30) -> list[dict]:
