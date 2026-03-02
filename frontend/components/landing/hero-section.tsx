@@ -4,6 +4,12 @@ import { memo, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import dynamic from "next/dynamic";
+
+const LiquidBackground = dynamic(
+  () => import("@/components/landing/liquid-background"),
+  { ssr: false }
+);
 
 const letterVariants = {
   hidden: { opacity: 0, y: 3 },
@@ -45,11 +51,18 @@ const HeroSection = memo(function HeroSection() {
               "radial-gradient(ellipse at center top, var(--warm-1) 0%, transparent 70%)",
           }}
         />
-        <div
-          className="absolute bottom-0 left-0 right-0 h-[200px]"
-          style={{ background: "linear-gradient(to bottom, transparent, white)" }}
-        />
       </div>
+
+      {/* Liquid effect overlay */}
+      <div className="absolute inset-0 z-[2] pointer-events-none opacity-60 [clip:rect(0,auto,auto,0)]">
+        <LiquidBackground />
+      </div>
+
+      {/* Bottom fade to white – sits ABOVE the liquid overlay */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-[300px] pointer-events-none z-[3]"
+        style={{ background: "linear-gradient(to bottom, transparent, white)" }}
+      />
 
       {/* Header / Nav */}
       <header className="absolute top-0 left-0 right-0 z-50 bg-transparent">
@@ -175,9 +188,6 @@ const HeroSection = memo(function HeroSection() {
         </motion.div>
       </div>
 
-      {/* Floating gradient orbs */}
-      <div className="absolute top-[20%] left-[10%] w-64 h-64 rounded-full bg-gradient-to-br from-amber-100/40 to-orange-100/20 blur-3xl pointer-events-none animate-float-slow" />
-      <div className="absolute top-[30%] right-[8%] w-72 h-72 rounded-full bg-gradient-to-br from-blue-100/30 to-indigo-100/20 blur-3xl pointer-events-none animate-float-slower" />
     </section>
   );
 });
