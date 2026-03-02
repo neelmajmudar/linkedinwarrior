@@ -21,6 +21,8 @@ import {
   Loader2,
   Sparkles,
   Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 const AuthPage = dynamic(() => import("@/components/auth-page"), {
@@ -50,13 +52,16 @@ const Onboarding = dynamic(() => import("@/components/onboarding"), {
   ),
 });
 
-const tabs = [
+const linkedinTabs = [
   { id: "generate", label: "Generate", icon: PenTool, href: "/dashboard/generate" },
   { id: "posts", label: "My Posts", icon: FileText, href: "/dashboard/posts" },
   { id: "calendar", label: "Calendar", icon: Calendar, href: "/dashboard/calendar" },
   { id: "engage", label: "Engage", icon: MessageSquare, href: "/dashboard/engage" },
   { id: "research", label: "Research", icon: Sparkles, href: "/dashboard/research" },
   { id: "analytics", label: "Analytics", icon: BarChart3, href: "/dashboard/analytics" },
+];
+
+const emailTabs = [
   { id: "email", label: "Email", icon: Mail, href: "/dashboard/email" },
 ];
 
@@ -128,41 +133,78 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
-// ── Instant-paint skeleton: header + nav + content placeholder ──
+// ── Instant-paint skeleton: sidebar + content placeholder ──
 
 function DashboardSkeleton() {
   return (
-    <div className="min-h-screen bg-white">
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
-            <Sword className="h-4 w-4 text-white" />
+    <div className="min-h-screen bg-white flex">
+      {/* Sidebar skeleton */}
+      <aside className="w-56 border-r border-gray-200 bg-white flex-shrink-0">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
+              <Sword className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-lg tracking-tight text-[#1a1a1a]">LinkedInWarrior</span>
           </div>
-          <span className="text-lg tracking-tight text-[#1a1a1a]">
-            LinkedInWarrior
-          </span>
         </div>
-        <div className="skeleton h-8 w-36 rounded-full" />
-      </header>
-      <nav className="border-b border-gray-200 px-6 bg-white">
-        <div className="max-w-4xl mx-auto flex gap-1 py-3">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="skeleton h-5 w-20 rounded" />
+        <div className="p-3 space-y-2">
+          <div className="skeleton h-3 w-16 rounded mb-2" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="skeleton h-8 w-full rounded" />
           ))}
+          <div className="my-3 border-t border-gray-200" />
+          <div className="skeleton h-3 w-12 rounded mb-2" />
+          <div className="skeleton h-8 w-full rounded" />
         </div>
-      </nav>
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <div className="space-y-4">
-          <div className="skeleton h-8 w-48 rounded" />
-          <div className="skeleton h-4 w-72 rounded" />
-          <div className="skeleton h-32 w-full rounded-lg" />
-        </div>
-      </main>
+      </aside>
+      {/* Content skeleton */}
+      <div className="flex-1">
+        <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-end">
+          <div className="skeleton h-8 w-36 rounded-full" />
+        </header>
+        <main className="max-w-4xl mx-auto px-6 py-8">
+          <div className="space-y-4">
+            <div className="skeleton h-8 w-48 rounded" />
+            <div className="skeleton h-4 w-72 rounded" />
+            <div className="skeleton h-32 w-full rounded-lg" />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-// ── Dashboard shell: renders header + nav IMMEDIATELY, gates only <main> content ──
+// ── Sidebar nav link ──
+
+function SidebarLink({
+  tab,
+  isActive,
+  collapsed,
+}: {
+  tab: { id: string; label: string; icon: React.ComponentType<{ className?: string }>; href: string };
+  isActive: boolean;
+  collapsed: boolean;
+}) {
+  const Icon = tab.icon;
+  return (
+    <Link
+      href={tab.href}
+      prefetch
+      title={collapsed ? tab.label : undefined}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+        isActive
+          ? "bg-[#1a1a1a] text-white"
+          : "text-gray-500 hover:text-[#1a1a1a] hover:bg-gray-100"
+      } ${collapsed ? "justify-center" : ""}`}
+    >
+      <Icon className="h-4 w-4 flex-shrink-0" />
+      {!collapsed && <span>{tab.label}</span>}
+    </Link>
+  );
+}
+
+// ── Dashboard shell: renders sidebar + header + content ──
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -172,6 +214,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const linkedinQuery = useLinkedinStatus();
   const gmailQuery = useGmailStatus();
   const [connecting, setConnecting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const linkedinConnected = linkedinQuery.data?.connected ?? false;
   const gmailConnected = gmailQuery.data?.connected ?? false;
@@ -261,84 +304,139 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   })();
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header — paints immediately, no async dependency */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity cursor-pointer">
-          <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
-            <Sword className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-lg tracking-tight text-[#1a1a1a]">
-            LinkedInWarrior
-          </span>
-        </a>
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-white flex">
+      {/* ── Sidebar ── */}
+      <aside
+        className={`fixed top-0 left-0 h-full z-40 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out ${
+          sidebarOpen ? "w-56" : "w-[52px]"
+        }`}
+      >
+        {/* Logo + toggle */}
+        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200">
+          {sidebarOpen && (
+            <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity cursor-pointer">
+              <div className="w-7 h-7 rounded-full bg-warm-500 flex items-center justify-center flex-shrink-0">
+                <Sword className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="text-base tracking-tight text-[#1a1a1a] font-medium whitespace-nowrap">
+                LinkedInWarrior
+              </span>
+            </a>
+          )}
+          <button
+            onClick={() => setSidebarOpen((p) => !p)}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose className="h-4 w-4" />
+            ) : (
+              <PanelLeftOpen className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+
+        {/* Nav sections */}
+        {!showOnboarding && (
+          <nav className="flex-1 overflow-y-auto px-2 py-3">
+            {/* LinkedIn section */}
+            {sidebarOpen && (
+              <div className="px-2 mb-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  LinkedIn
+                </span>
+              </div>
+            )}
+            {!sidebarOpen && (
+              <div className="flex justify-center mb-1.5">
+                <Linkedin className="h-3.5 w-3.5 text-gray-400" />
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {linkedinTabs.map((t) => {
+                const isActive = pathname === t.href || (t.href === "/dashboard/generate" && pathname === "/dashboard");
+                return <SidebarLink key={t.id} tab={t} isActive={isActive} collapsed={!sidebarOpen} />;
+              })}
+            </div>
+
+            {/* Separator */}
+            <div className="my-3 mx-2 border-t border-gray-200" />
+
+            {/* Email section */}
+            {sidebarOpen && (
+              <div className="px-2 mb-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  Email
+                </span>
+              </div>
+            )}
+            {!sidebarOpen && (
+              <div className="flex justify-center mb-1.5">
+                <Mail className="h-3.5 w-3.5 text-gray-400" />
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {emailTabs.map((t) => {
+                const isActive = pathname === t.href;
+                return <SidebarLink key={t.id} tab={t} isActive={isActive} collapsed={!sidebarOpen} />;
+              })}
+            </div>
+          </nav>
+        )}
+
+        {/* Bottom: connection status + sign out */}
+        <div className="border-t border-gray-200 px-2 py-3 space-y-1">
           {linkedinConnected ? (
-            <div className="flex items-center gap-1.5 text-sm">
-              <Linkedin className="h-4 w-4 text-green-600" />
-              <span className="text-green-700 font-medium">Connected</span>
+            <div className={`flex items-center gap-2 px-3 py-1.5 text-sm ${!sidebarOpen ? "justify-center" : ""}`}>
+              <Linkedin className="h-4 w-4 text-green-600 flex-shrink-0" />
+              {sidebarOpen && <span className="text-green-700 font-medium text-xs">Connected</span>}
             </div>
           ) : (
             <button
               onClick={connectLinkedin}
               disabled={connecting}
-              className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
+              title={!sidebarOpen ? (connecting ? "Connecting…" : "Connect LinkedIn") : undefined}
+              className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50 w-full ${
+                !sidebarOpen ? "justify-center" : ""
+              }`}
             >
               {connecting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
               ) : (
-                <Linkedin className="h-4 w-4" />
+                <Linkedin className="h-4 w-4 flex-shrink-0" />
               )}
-              {connecting ? "Connecting…" : "Connect LinkedIn"}
+              {sidebarOpen && <span className="text-xs">{connecting ? "Connecting…" : "Connect LinkedIn"}</span>}
             </button>
           )}
           {gmailConnected && (
-            <div className="flex items-center gap-1.5 text-sm">
-              <Mail className="h-4 w-4 text-green-600" />
-              <span className="text-green-700 font-medium">Gmail</span>
+            <div className={`flex items-center gap-2 px-3 py-1.5 text-sm ${!sidebarOpen ? "justify-center" : ""}`}>
+              <Mail className="h-4 w-4 text-green-600 flex-shrink-0" />
+              {sidebarOpen && <span className="text-green-700 font-medium text-xs">Gmail</span>}
             </div>
           )}
           <button
             onClick={() => supabase.auth.signOut()}
-            className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             title="Sign out"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors w-full ${
+              !sidebarOpen ? "justify-center" : ""
+            }`}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-4 w-4 flex-shrink-0" />
+            {sidebarOpen && <span className="text-xs">Sign out</span>}
           </button>
         </div>
-      </header>
+      </aside>
 
-      {/* Tab navigation — always visible */}
-      {!showOnboarding && (
-        <nav className="border-b border-gray-200 px-6 bg-white">
-          <div className="max-w-4xl mx-auto flex gap-1">
-            {tabs.map((t) => {
-              const Icon = t.icon;
-              const isActive = pathname === t.href || (t.href === "/dashboard/generate" && pathname === "/dashboard");
-              return (
-                <Link
-                  key={t.id}
-                  href={t.href}
-                  prefetch
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
-                    isActive
-                      ? "border-[#1a1a1a] text-[#1a1a1a]"
-                      : "border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {t.label}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-      )}
-
-      {/* Content */}
-      <main className={showOnboarding ? "" : "max-w-4xl mx-auto px-6 py-8"}>
-        {mainContent}
-      </main>
+      {/* ── Main content area ── */}
+      <div
+        className={`flex-1 min-h-screen transition-all duration-300 ease-in-out ${
+          sidebarOpen ? "ml-56" : "ml-[52px]"
+        }`}
+      >
+        <main className={showOnboarding ? "" : "max-w-4xl mx-auto px-6 py-8"}>
+          {mainContent}
+        </main>
+      </div>
     </div>
   );
 }
