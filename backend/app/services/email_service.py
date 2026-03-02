@@ -3,6 +3,7 @@
 Handles account connection, webhook registration, email fetching, and sending replies.
 """
 
+import json
 import logging
 
 import httpx
@@ -211,8 +212,6 @@ def send_email_reply_sync(
     body: str,
 ) -> dict:
     """Synchronous version of send_email_reply for Celery tasks."""
-    import json
-
     with httpx.Client(timeout=60) as client:
         form_fields: list[tuple[str, tuple]] = [
             ("account_id", (None, account_id)),
@@ -232,3 +231,152 @@ def send_email_reply_sync(
         )
         resp.raise_for_status()
         return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Gmail Draft management via Unipile  (POST /api/v1/drafts)
+# ---------------------------------------------------------------------------
+
+
+async def create_gmail_draft(
+    account_id: str,
+    to_email: str,
+    to_name: str,
+    subject: str,
+    body: str,
+    reply_to_email_id: str | None = None,
+) -> str | None:
+    """Create a draft in Gmail via Unipile so it appears in the thread.
+
+    Returns the Unipile draft_id on success, or None on failure.
+    """
+    payload: dict = {
+        "account_id": account_id,
+        "to": [{"identifier": to_email, "display_name": to_name}],
+        "subject": subject,
+        "body": body,
+    }
+    if reply_to_email_id:
+        payload["reply_to"] = reply_to_email_id
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{settings.UNIPILE_DSN}/api/v1/drafts",
+                headers={
+                    "X-API-KEY": settings.UNIPILE_API_KEY,
+                    "Content-Type": "application/json",
+                    "accept": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            draft_id = data.get("draft_id")
+            logger.info("[email] Created Gmail draft %s (reply_to=%s)", draft_id, reply_to_email_id)
+            return draft_id
+    except Exception as e:
+        logger.error("[email] Failed to create Gmail draft: %s", e)
+        return None
+
+
+def create_gmail_draft_sync(
+    account_id: str,
+    to_email: str,
+    to_name: str,
+    subject: str,
+    body: str,
+    reply_to_email_id: str | None = None,
+) -> str | None:
+    """Synchronous version of create_gmail_draft for Celery tasks."""
+    payload: dict = {
+        "account_id": account_id,
+        "to": [{"identifier": to_email, "display_name": to_name}],
+        "subject": subject,
+        "body": body,
+    }
+    if reply_to_email_id:
+        payload["reply_to"] = reply_to_email_id
+
+    try:
+        with httpx.Client(timeout=60) as client:
+            resp = client.post(
+                f"{settings.UNIPILE_DSN}/api/v1/drafts",
+                headers={
+                    "X-API-KEY": settings.UNIPILE_API_KEY,
+                    "Content-Type": "application/json",
+                    "accept": "application/json",
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            draft_id = data.get("draft_id")
+            logger.info("[email] Created Gmail draft (sync) %s", draft_id)
+            return draft_id
+    except Exception as e:
+        logger.error("[email] Failed to create Gmail draft (sync): %s", e)
+        return None
+
+
+async def delete_gmail_draft(unipile_draft_id: str) -> bool:
+    """Delete a Gmail draft via Unipile. Returns True on success."""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.delete(
+                f"{settings.UNIPILE_DSN}/api/v1/drafts/{unipile_draft_id}",
+                headers={
+                    "X-API-KEY": settings.UNIPILE_API_KEY,
+                    "accept": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            logger.info("[email] Deleted Gmail draft %s", unipile_draft_id)
+            return True
+    except Exception as e:
+        logger.warning("[email] Failed to delete Gmail draft %s: %s", unipile_draft_id, e)
+        return False
+
+
+def delete_gmail_draft_sync(unipile_draft_id: str) -> bool:
+    """Synchronous version of delete_gmail_draft for Celery tasks."""
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.delete(
+                f"{settings.UNIPILE_DSN}/api/v1/drafts/{unipile_draft_id}",
+                headers={
+                    "X-API-KEY": settings.UNIPILE_API_KEY,
+                    "accept": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            logger.info("[email] Deleted Gmail draft (sync) %s", unipile_draft_id)
+            return True
+    except Exception as e:
+        logger.warning("[email] Failed to delete Gmail draft (sync) %s: %s", unipile_draft_id, e)
+        return False
+
+
+async def update_gmail_draft(
+    unipile_draft_id: str,
+    account_id: str,
+    to_email: str,
+    to_name: str,
+    subject: str,
+    body: str,
+    reply_to_email_id: str | None = None,
+) -> str | None:
+    """Update a Gmail draft by deleting and re-creating it.
+
+    Unipile doesn't expose a PATCH endpoint for drafts, so we delete + create.
+    Returns the new draft_id, or None on failure.
+    """
+    await delete_gmail_draft(unipile_draft_id)
+    return await create_gmail_draft(
+        account_id=account_id,
+        to_email=to_email,
+        to_name=to_name,
+        subject=subject,
+        body=body,
+        reply_to_email_id=reply_to_email_id,
+    )

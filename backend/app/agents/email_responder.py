@@ -232,13 +232,49 @@ async def save_results(state: EmailResponderState) -> dict:
 
     # Save draft reply if we generated one
     if state.get("draft_reply") and not state.get("should_skip"):
-        db.table("email_drafts").insert({
+        insert_data = {
             "user_id": state["user_id"],
             "email_id": state["email_id"],
             "subject": state.get("draft_subject", ""),
             "body": state["draft_reply"],
             "status": "draft",
-        }).execute()
+        }
+
+        # Create a Gmail draft via Unipile so it appears in the thread
+        try:
+            from app.services.email_service import create_gmail_draft
+
+            email_result = db.table("emails") \
+                .select("unipile_email_id, from_email, from_name, email_account_id") \
+                .eq("id", state["email_id"]) \
+                .execute()
+
+            if email_result.data:
+                email_row = email_result.data[0]
+                acct_result = db.table("email_accounts") \
+                    .select("unipile_account_id") \
+                    .eq("id", email_row["email_account_id"]) \
+                    .execute()
+
+                if acct_result.data:
+                    unipile_draft_id = await create_gmail_draft(
+                        account_id=acct_result.data[0]["unipile_account_id"],
+                        to_email=email_row["from_email"],
+                        to_name=email_row.get("from_name") or "",
+                        subject=state.get("draft_subject", ""),
+                        body=state["draft_reply"],
+                        reply_to_email_id=email_row["unipile_email_id"],
+                    )
+                    if unipile_draft_id:
+                        insert_data["unipile_draft_id"] = unipile_draft_id
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "[agent] Gmail draft creation failed for email %s: %s (draft saved locally only)",
+                state["email_id"], e,
+            )
+
+        db.table("email_drafts").insert(insert_data).execute()
 
     return {}
 
