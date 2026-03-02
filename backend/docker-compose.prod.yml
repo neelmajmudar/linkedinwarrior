@@ -1,11 +1,18 @@
 version: "3.8"
 
+# ---------------------------------------------------------------------------
+# Production deployment with horizontal scaling.
+#
+# Scale email workers:   docker compose -f docker-compose.prod.yml up --scale celery-email=3
+# Scale general workers: docker compose -f docker-compose.prod.yml up --scale celery-general=2
+# ---------------------------------------------------------------------------
+
 services:
+  # ── FastAPI (Gunicorn multi-worker) ──
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: linkedinwarrior-backend
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -14,9 +21,15 @@ services:
     environment:
       - ENVIRONMENT=production
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - linkedinwarrior-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
     healthcheck:
       test:
         [
@@ -30,9 +43,9 @@ services:
       retries: 3
       start_period: 40s
 
+  # ── Redis (broker + result backend) ──
   redis:
     image: redis:7-alpine
-    container_name: linkedinwarrior-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -40,46 +53,82 @@ services:
       - redis-data:/data
     networks:
       - linkedinwarrior-network
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
 
-  celery-worker:
+  # ── Celery general worker (publishing, analytics, default tasks) ──
+  celery-general:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: linkedinwarrior-celery
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - ENVIRONMENT=production
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_healthy
     networks:
       - linkedinwarrior-network
     command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q default,publishing,analytics
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
+  # ── Celery email worker (dedicated, scalable independently) ──
+  celery-email:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - linkedinwarrior-network
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=8 -Q email
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
+
+  # ── Celery Beat (single instance scheduler) ──
   celery-beat:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: linkedinwarrior-beat
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - ENVIRONMENT=production
     depends_on:
-      - redis
-      - celery-worker
+      redis:
+        condition: service_healthy
     networks:
       - linkedinwarrior-network
     command: celery -A app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
 networks:
   linkedinwarrior-network:

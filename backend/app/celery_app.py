@@ -4,11 +4,20 @@ This module creates the Celery instance used by workers and Beat scheduler.
 It is intentionally separate from FastAPI so workers can import it without
 loading the entire web application.
 
-Run worker:   celery -A app.celery_app worker --loglevel=info --concurrency=4
-Run beat:     celery -A app.celery_app beat --loglevel=info
-Run both:     celery -A app.celery_app worker --beat --loglevel=info  (dev only)
+Run worker (general):
+    celery -A app.celery_app worker --loglevel=info --concurrency=4 -Q default,publishing,analytics
+
+Run worker (email-dedicated):
+    celery -A app.celery_app worker --loglevel=info --concurrency=8 -Q email
+
+Run beat:
+    celery -A app.celery_app beat --loglevel=info
+
+Run both (dev only):
+    celery -A app.celery_app worker --beat --loglevel=info -Q default,publishing,analytics,email
 """
 
+from kombu import Queue
 from celery import Celery
 from celery.schedules import crontab
 from app.config import settings
@@ -37,14 +46,28 @@ celery.conf.update(
     # Retry broker connection on startup
     broker_connection_retry_on_startup=True,
 
-    # Default queue
-    task_default_queue="default",
+    # Redis connection pool — prevents exhausting connections at scale
+    broker_pool_limit=20,
+    redis_max_connections=30,
 
-    # Rate-limit LinkedIn API calls globally across all workers
+    # Worker concurrency (overridable per container via CLI --concurrency)
+    worker_concurrency=settings.CELERY_WORKER_CONCURRENCY,
+
+    # Queue declarations
+    task_default_queue="default",
+    task_queues=(
+        Queue("default"),
+        Queue("publishing"),
+        Queue("analytics"),
+        Queue("email"),
+    ),
+
+    # Route tasks to dedicated queues for isolation
     task_routes={
         "app.tasks.publish_post_task": {"queue": "publishing"},
         "app.tasks.analytics_snapshot_task": {"queue": "analytics"},
         "app.tasks.process_email_task": {"queue": "email"},
+        "app.tasks.purge_expired_emails": {"queue": "email"},
         "app.tasks.*": {"queue": "default"},
     },
 
@@ -52,7 +75,7 @@ celery.conf.update(
     beat_schedule={
         "enqueue-due-posts-every-2-min": {
             "task": "app.tasks.enqueue_due_posts",
-            "schedule": 120.0,  # every 2 minutes
+            "schedule": 120.0,
         },
         "daily-analytics-snapshot": {
             "task": "app.tasks.daily_analytics_snapshot",

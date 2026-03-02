@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.config import settings
 from app.db import get_supabase
@@ -60,8 +60,50 @@ def html_to_text(html: str) -> str:
         return re.sub(r"<[^>]+>", " ", html).strip()
 
 
+async def _process_email_background(
+    db_email_id: str, user_id: str, subject: str, body: str,
+    from_name: str, from_email: str,
+) -> None:
+    """Background task: process an email through the AI agent.
+
+    Tries Celery first (if Redis is available), otherwise processes inline.
+    This runs as a FastAPI BackgroundTask so the webhook returns immediately.
+    """
+    # Try Celery first (offloads to a separate worker process)
+    try:
+        from app.tasks import process_email_task
+        process_email_task.delay(
+            db_email_id, user_id, subject, body, from_name, from_email
+        )
+        logger.info("[webhook] Enqueued email via Celery: %s for user %s", db_email_id, user_id)
+        return
+    except Exception as e:
+        logger.warning(
+            "[webhook] Celery unavailable for %s (%s) — processing inline",
+            db_email_id, e,
+        )
+
+    # Fallback: process inline via the LangGraph agent
+    try:
+        from app.agents.email_responder import process_email
+        await process_email(
+            user_id=user_id,
+            email_id=db_email_id,
+            email_subject=subject,
+            email_body=body,
+            from_name=from_name,
+            from_email=from_email,
+        )
+        logger.info("[webhook] Processed email inline: %s for user %s", db_email_id, user_id)
+    except Exception as inline_err:
+        logger.error(
+            "[webhook] Inline processing failed for %s: %s — email saved as 'new'",
+            db_email_id, inline_err,
+        )
+
+
 @router.post("/email")
-async def email_webhook(request: Request):
+async def email_webhook(request: Request, background_tasks: BackgroundTasks):
     """Receive Unipile new-email webhook events.
 
     Expected payload (mail_received):
@@ -163,33 +205,17 @@ async def email_webhook(request: Request):
         logger.error("[webhook] Failed to insert email for user %s", user_id)
         return {"status": "error", "reason": "insert failed"}
 
-    # Enqueue processing via Celery, or fall back to inline processing
-    processed_via = "pending"
-    try:
-        from app.tasks import process_email_task
-        process_email_task.delay(
-            db_email_id, user_id, subject, body[:10000], from_name, from_email
-        )
-        processed_via = "celery"
-        logger.info("[webhook] Enqueued email processing: %s for user %s", db_email_id, user_id)
-    except Exception as e:
-        logger.warning("[webhook] Celery not available (%s), processing inline...", e)
-        try:
-            from app.agents.email_responder import process_email
-            result = await process_email(
-                user_id=user_id,
-                email_id=db_email_id,
-                email_subject=subject,
-                email_body=body[:10000] if body else "",
-                from_name=from_name,
-                from_email=from_email,
-            )
-            processed_via = "inline"
-            logger.info(
-                "[webhook] Inline processed email %s — category: %s",
-                db_email_id, result.get("category"),
-            )
-        except Exception as proc_err:
-            logger.error("[webhook] Inline processing failed for %s: %s", db_email_id, proc_err)
+    # Schedule processing as a FastAPI background task.
+    # Returns 202 immediately; _process_email_background tries Celery first,
+    # then falls back to inline processing if Redis/Celery is unavailable.
+    background_tasks.add_task(
+        _process_email_background,
+        db_email_id, user_id, subject, body[:10000], from_name, from_email,
+    )
+    logger.info("[webhook] Accepted email %s for user %s — processing scheduled", db_email_id, user_id)
 
-    return {"status": "accepted", "email_id": db_email_id, "processed_via": processed_via}
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=202,
+        content={"status": "accepted", "email_id": db_email_id},
+    )
