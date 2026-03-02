@@ -458,7 +458,7 @@ def _maybe_auto_send(db: Client, email_id: str, user_id: str, category: str):
 
     # Get the draft
     draft_result = db.table("email_drafts") \
-        .select("id, subject, body") \
+        .select("id, subject, body, unipile_draft_id") \
         .eq("email_id", email_id) \
         .eq("user_id", user_id) \
         .eq("status", "draft") \
@@ -491,7 +491,7 @@ def _maybe_auto_send(db: Client, email_id: str, user_id: str, category: str):
     account_id = acct_result.data[0]["unipile_account_id"]
 
     try:
-        from app.services.email_service import send_email_reply_sync
+        from app.services.email_service import send_email_reply_sync, delete_gmail_draft_sync
 
         send_email_reply_sync(
             account_id=account_id,
@@ -501,6 +501,10 @@ def _maybe_auto_send(db: Client, email_id: str, user_id: str, category: str):
             subject=draft["subject"],
             body=draft["body"],
         )
+
+        # Delete the Gmail draft now that the real reply has been sent
+        if draft.get("unipile_draft_id"):
+            delete_gmail_draft_sync(draft["unipile_draft_id"])
 
         now_iso = datetime.now(timezone.utc).isoformat()
         db.table("email_drafts").update({

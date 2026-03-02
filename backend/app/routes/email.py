@@ -15,6 +15,9 @@ from app.services.email_service import (
     handle_gmail_callback,
     check_gmail_connection,
     send_email_reply,
+    create_gmail_draft,
+    delete_gmail_draft,
+    update_gmail_draft,
 )
 
 router = APIRouter(prefix="/api/email", tags=["email"])
@@ -161,14 +164,18 @@ async def update_draft(email_id: str, request: Request, user: dict = Depends(get
 
     db = get_supabase()
 
-    # Verify email belongs to user
-    email_check = db.table("emails").select("id").eq("id", email_id).eq("user_id", user["id"]).execute()
+    # Verify email belongs to user and get details needed for Gmail draft sync
+    email_check = db.table("emails") \
+        .select("id, unipile_email_id, from_email, from_name, email_account_id") \
+        .eq("id", email_id).eq("user_id", user["id"]).execute()
     if not email_check.data:
         raise HTTPException(status_code=404, detail="Email not found")
 
+    email_data = email_check.data[0]
+
     # Get existing draft
     draft_result = db.table("email_drafts") \
-        .select("id") \
+        .select("id, subject, body, unipile_draft_id") \
         .eq("email_id", email_id) \
         .eq("user_id", user["id"]) \
         .order("created_at", desc=True) \
@@ -182,17 +189,55 @@ async def update_draft(email_id: str, request: Request, user: dict = Depends(get
         update_data["subject"] = new_subject
 
     if draft_result.data:
-        db.table("email_drafts").update(update_data).eq("id", draft_result.data[0]["id"]).execute()
+        existing_draft = draft_result.data[0]
+
+        # Sync the edit to the Gmail draft via Unipile
+        if existing_draft.get("unipile_draft_id") and email_data.get("email_account_id"):
+            acct_result = db.table("email_accounts") \
+                .select("unipile_account_id") \
+                .eq("id", email_data["email_account_id"]).execute()
+            if acct_result.data:
+                new_unipile_id = await update_gmail_draft(
+                    unipile_draft_id=existing_draft["unipile_draft_id"],
+                    account_id=acct_result.data[0]["unipile_account_id"],
+                    to_email=email_data["from_email"],
+                    to_name=email_data.get("from_name") or "",
+                    subject=new_subject or existing_draft.get("subject", ""),
+                    body=new_body or existing_draft.get("body", ""),
+                    reply_to_email_id=email_data.get("unipile_email_id"),
+                )
+                if new_unipile_id:
+                    update_data["unipile_draft_id"] = new_unipile_id
+
+        db.table("email_drafts").update(update_data).eq("id", existing_draft["id"]).execute()
         return {"status": "updated"}
     else:
-        # Create a new draft if none exists
-        db.table("email_drafts").insert({
+        # Create a new draft if none exists — also push to Gmail
+        insert_data = {
             "user_id": user["id"],
             "email_id": email_id,
             "subject": new_subject or "",
             "body": new_body or "",
             "status": "draft",
-        }).execute()
+        }
+
+        if email_data.get("email_account_id"):
+            acct_result = db.table("email_accounts") \
+                .select("unipile_account_id") \
+                .eq("id", email_data["email_account_id"]).execute()
+            if acct_result.data:
+                unipile_draft_id = await create_gmail_draft(
+                    account_id=acct_result.data[0]["unipile_account_id"],
+                    to_email=email_data["from_email"],
+                    to_name=email_data.get("from_name") or "",
+                    subject=new_subject or "",
+                    body=new_body or "",
+                    reply_to_email_id=email_data.get("unipile_email_id"),
+                )
+                if unipile_draft_id:
+                    insert_data["unipile_draft_id"] = unipile_draft_id
+
+        db.table("email_drafts").insert(insert_data).execute()
         return {"status": "created"}
 
 
@@ -215,7 +260,7 @@ async def send_reply(email_id: str, user: dict = Depends(get_current_user)):
 
     # Get the draft
     draft_result = db.table("email_drafts") \
-        .select("id, subject, body") \
+        .select("id, subject, body, unipile_draft_id") \
         .eq("email_id", email_id) \
         .eq("user_id", user["id"]) \
         .eq("status", "draft") \
@@ -249,6 +294,10 @@ async def send_reply(email_id: str, user: dict = Depends(get_current_user)):
             body=draft["body"],
         )
 
+        # Delete the Gmail draft now that the real reply has been sent
+        if draft.get("unipile_draft_id"):
+            await delete_gmail_draft(draft["unipile_draft_id"])
+
         # Update draft and email status
         now_iso = datetime.now(timezone.utc).isoformat()
         db.table("email_drafts").update({
@@ -281,6 +330,14 @@ async def reprocess_email(email_id: str, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Email not found")
 
     email_data = email_result.data[0]
+
+    # Clean up any existing Gmail drafts before deleting local records
+    old_drafts = db.table("email_drafts") \
+        .select("unipile_draft_id") \
+        .eq("email_id", email_id).eq("user_id", user["id"]).execute()
+    for od in (old_drafts.data or []):
+        if od.get("unipile_draft_id"):
+            await delete_gmail_draft(od["unipile_draft_id"])
 
     # Delete existing drafts
     db.table("email_drafts").delete().eq("email_id", email_id).eq("user_id", user["id"]).execute()

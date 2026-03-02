@@ -175,6 +175,31 @@ async def email_webhook(request: Request, background_tasks: BackgroundTasks):
     if existing.data:
         return {"status": "duplicate", "email_id": email_id}
 
+    # Skip drafts/sent emails — creating a Gmail draft via Unipile fires
+    # this webhook, which would otherwise create an infinite processing loop.
+    # Check: if the sender (from_email) matches any to_email we've stored for
+    # this user, it means the sender IS the user (draft or sent item).
+    if from_email:
+        own_email_check = db.table("emails") \
+            .select("id") \
+            .eq("user_id", user_id) \
+            .eq("to_email", from_email) \
+            .limit(1) \
+            .execute()
+        if own_email_check.data:
+            logger.info("[webhook] Skipping outgoing email (draft/sent) from %s: %s", from_email, email_id)
+            return {"status": "ignored", "reason": "outgoing email (draft/sent)"}
+
+    # Secondary check: see if this email_id matches a draft we created
+    draft_match = db.table("email_drafts") \
+        .select("id") \
+        .eq("unipile_draft_id", email_id) \
+        .limit(1) \
+        .execute()
+    if draft_match.data:
+        logger.info("[webhook] Skipping webhook for our own draft: %s", email_id)
+        return {"status": "ignored", "reason": "own draft"}
+
     # Get the email_account record id
     acct_full = db.table("email_accounts") \
         .select("id") \
