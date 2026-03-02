@@ -4,6 +4,7 @@ Classifies emails, extracts action items, and generates professional reply draft
 using the user's LinkedIn voice profile and post embeddings for style reference.
 """
 
+import asyncio
 import json
 from typing import TypedDict
 
@@ -14,6 +15,11 @@ from langgraph.graph import StateGraph, END
 from app.config import settings
 from app.db import get_supabase
 from app.services.embeddings import similarity_search
+
+# Global semaphore — limits concurrent OpenAI API calls across all
+# async tasks in the same process. Prevents rate-limit errors and
+# controls cost at scale (configurable via OPENAI_MAX_CONCURRENCY).
+_openai_semaphore = asyncio.Semaphore(settings.OPENAI_MAX_CONCURRENCY)
 
 
 # Categories that should be skipped (no reply draft generated)
@@ -110,7 +116,8 @@ async def classify_email(state: EmailResponderState) -> dict:
         body=state["email_body"][:3000],
     )
 
-    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    async with _openai_semaphore:
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
     response_text = response.content
 
     try:
@@ -195,7 +202,8 @@ async def generate_reply(state: EmailResponderState) -> dict:
         HumanMessage(content="Write a professional reply to this email."),
     ]
 
-    response = await llm.ainvoke(messages)
+    async with _openai_semaphore:
+        response = await llm.ainvoke(messages)
 
     # Generate reply subject
     subject = state["email_subject"]

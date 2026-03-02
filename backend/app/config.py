@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     UNIPILE_WEBHOOK_SECRET: str = ""
 
+    # Scaling
+    WEB_WORKERS: int = 4
+    OPENAI_MAX_CONCURRENCY: int = 10
+    CELERY_WORKER_CONCURRENCY: int = 8
+
     model_config = {"env_file": ("backend/.env", ".env"), "extra": "ignore"}
 
 

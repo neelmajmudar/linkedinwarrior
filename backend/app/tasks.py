@@ -389,7 +389,7 @@ def purge_expired_emails(self):
     name="app.tasks.process_email_task",
     max_retries=3,
     default_retry_delay=30,
-    rate_limit="20/m",
+    rate_limit="60/m",
     acks_late=True,
 )
 def process_email_task(self, email_id: str, user_id: str,

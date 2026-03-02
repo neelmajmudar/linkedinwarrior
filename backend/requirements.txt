@@ -14,3 +14,4 @@ langchain-core>=1.2.15
 langchain-openai>=1.1.10
 python-dotenv==1.0.1
 python-multipart==0.0.20
+gunicorn==23.0.0
