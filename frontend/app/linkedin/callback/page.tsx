@@ -33,9 +33,18 @@ function LinkedInCallbackContent() {
         setStatus("success");
 
         // Notify the parent (dashboard) window that LinkedIn is connected
+        // Use localStorage event as a reliable cross-tab signal (postMessage
+        // breaks when the popup navigates through an external domain).
+        localStorage.setItem("linkedin-connected", Date.now().toString());
+
         if (window.opener) {
           window.opener.postMessage({ type: "linkedin-connected" }, "*");
           setTimeout(() => window.close(), 1500);
+        } else {
+          // Popup lost opener ref after cross-origin redirect — redirect back
+          setTimeout(() => {
+            window.location.href = "/dashboard";
+          }, 1500);
         }
       } catch (err: unknown) {
         setStatus("error");

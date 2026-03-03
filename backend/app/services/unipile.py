@@ -13,7 +13,8 @@ async def get_hosted_auth_url(user_id: str) -> str:
                 "Content-Type": "application/json",
             },
             json={
-                "type": "LINKEDIN",
+                "type": "create",
+                "providers": ["LINKEDIN"],
                 "api_url": settings.UNIPILE_DSN,
                 "expiresOn": "2099-01-01T00:00:00.000Z",
                 "name": user_id,
@@ -29,9 +30,10 @@ async def get_hosted_auth_url(user_id: str) -> str:
 async def handle_auth_callback(user_id: str, account_id: str) -> None:
     """Store the Unipile account_id on the user record after successful auth."""
     db = get_supabase()
-    db.table("users").update({
+    db.table("users").upsert({
+        "id": user_id,
         "unipile_account_id": account_id,
-    }).eq("id", user_id).execute()
+    }, on_conflict="id").execute()
 
 
 async def publish_post(
