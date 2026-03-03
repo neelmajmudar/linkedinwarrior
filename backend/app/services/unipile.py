@@ -16,12 +16,14 @@ async def get_hosted_auth_url(user_id: str) -> str:
                 "type": "LINKEDIN",
                 "api_url": settings.UNIPILE_DSN,
                 "expiresOn": "2099-01-01T00:00:00.000Z",
-                "notify_url": f"{settings.FRONTEND_URL}/linkedin/callback",
+                "name": user_id,
+                "success_redirect_url": f"{settings.FRONTEND_URL}/linkedin/callback",
+                "failure_redirect_url": f"{settings.FRONTEND_URL}/linkedin/callback?error=auth_failed",
             },
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("url", "")
+        return data.get("url", data.get("hosted_auth_link", ""))
 
 
 async def handle_auth_callback(user_id: str, account_id: str) -> None:

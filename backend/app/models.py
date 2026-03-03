@@ -61,7 +61,6 @@ class UserProfile(BaseModel):
 class ScrapeStatusResponse(BaseModel):
     scrape_status: str
     posts_count: int = 0
-    embeddings_count: int = 0
 
 
 class ContentItem(BaseModel):
