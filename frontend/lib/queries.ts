@@ -43,7 +43,9 @@ export function useLinkedinStatus() {
   return useQuery({
     queryKey: queryKeys.linkedinStatus,
     queryFn: () => apiGet<{ connected: boolean }>("/api/linkedin/status"),
-    retry: false,
+    retry: 2,
+    retryDelay: 2000,
+    staleTime: 30_000,
   });
 }
 
