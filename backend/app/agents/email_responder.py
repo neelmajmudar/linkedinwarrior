@@ -14,7 +14,6 @@ from langgraph.graph import StateGraph, END
 
 from app.config import settings
 from app.db import get_supabase
-from app.services.embeddings import similarity_search
 
 # Global semaphore — limits concurrent OpenAI API calls across all
 # async tasks in the same process. Prevents rate-limit errors and
@@ -37,7 +36,6 @@ class EmailResponderState(TypedDict):
     from_name: str
     from_email: str
     voice_profile: dict
-    similar_posts: list[dict]
     category: str
     action_items: list[dict]
     priority: str
@@ -77,11 +75,8 @@ Subject: {subject}
 
 REPLY_SYSTEM_PROMPT = """You are a professional email ghostwriter. Write a reply to the email below on behalf of the person whose voice profile is provided.
 
-VOICE PROFILE (from their LinkedIn writing — match this tone and style):
+PERSONA REPORT (from their LinkedIn writing — match this tone and style):
 {voice_profile}
-
-THEIR WRITING EXAMPLES (for style reference — match voice, NOT content):
-{similar_posts}
 
 RULES:
 - Write in the person's natural voice and professional tone
@@ -89,6 +84,7 @@ RULES:
 - Address the specific points raised in the original email
 - Include any necessary next steps or answers
 - Be warm but professional
+- Match their vocabulary, tone, and sentence patterns from the persona report
 - Do NOT include a subject line — just the email body
 - Do NOT include greetings like "Dear" unless the person's style uses them
 - Do NOT include sign-offs like "Best regards" unless the person's style uses them
@@ -148,26 +144,18 @@ async def classify_email(state: EmailResponderState) -> dict:
 
 
 async def retrieve_context(state: EmailResponderState) -> dict:
-    """Load voice profile and retrieve similar posts for style reference."""
+    """Load the persona report (voice profile) for style reference."""
     if state.get("should_skip", False):
-        return {"voice_profile": {}, "similar_posts": []}
+        return {"voice_profile": {}}
 
     db = get_supabase()
     user_result = db.table("users").select("voice_profile").eq("id", state["user_id"]).execute()
 
     if not user_result.data or not user_result.data[0].get("voice_profile"):
-        return {"voice_profile": {}, "similar_posts": []}
+        return {"voice_profile": {}}
 
     voice_profile = user_result.data[0]["voice_profile"]
-
-    # Use email subject + first part of body as the query for similarity search
-    query = f"{state['email_subject']} {state['email_body'][:500]}"
-    similar_posts = await similarity_search(state["user_id"], query, limit=5)
-
-    return {
-        "voice_profile": voice_profile,
-        "similar_posts": similar_posts,
-    }
+    return {"voice_profile": voice_profile}
 
 
 async def generate_reply(state: EmailResponderState) -> dict:
@@ -178,13 +166,8 @@ async def generate_reply(state: EmailResponderState) -> dict:
     if not state.get("voice_profile"):
         return {"draft_subject": "", "draft_reply": "[No voice profile available — complete onboarding first]"}
 
-    posts_block = ""
-    for i, post in enumerate(state.get("similar_posts", []), 1):
-        posts_block += f"\n--- Example {i} ---\n{post.get('content', '')}\n"
-
     system_prompt = REPLY_SYSTEM_PROMPT.format(
         voice_profile=json.dumps(state["voice_profile"], indent=2),
-        similar_posts=posts_block if posts_block else "No examples available.",
         from_name=state["from_name"],
         from_email=state["from_email"],
         subject=state["email_subject"],
@@ -333,7 +316,6 @@ async def process_email(
         "from_name": from_name,
         "from_email": from_email,
         "voice_profile": {},
-        "similar_posts": [],
         "category": "",
         "action_items": [],
         "priority": "medium",

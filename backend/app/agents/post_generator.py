@@ -1,4 +1,4 @@
-"""LangGraph agent for generating LinkedIn posts in the user's voice."""
+"""LangGraph agent for generating LinkedIn posts using the persona report."""
 
 import json
 from typing import AsyncGenerator, TypedDict
@@ -9,62 +9,80 @@ from langgraph.graph import StateGraph, END
 
 from app.config import settings
 from app.db import get_supabase
-from app.services.embeddings import similarity_search
 
 
 class PostGenState(TypedDict):
     user_id: str
     prompt: str
     voice_profile: dict
-    similar_posts: list[dict]
     system_prompt: str
     draft: str
     draft_id: str
 
 
-def _build_system_prompt(voice_profile: dict, similar_posts: list[dict]) -> str:
-    posts_block = ""
-    for i, post in enumerate(similar_posts, 1):
-        posts_block += f"\n--- Example {i} ---\n{post.get('content', '')}\n"
+def _build_system_prompt(voice_profile: dict) -> str:
+    """Build a system prompt from the comprehensive persona report."""
+    # Extract key sections for a focused ghostwriting prompt
+    executive_summary = voice_profile.get("executive_summary", "")
+    writing_style = json.dumps(voice_profile.get("writing_style_guide", {}), indent=2)
+    voice_dna = json.dumps(voice_profile.get("voice_dna", {}), indent=2)
+    thinking = json.dumps(voice_profile.get("thinking_profile", {}), indent=2)
+    hooks = json.dumps(voice_profile.get("hook_patterns", {}), indent=2)
+    rules = json.dumps(voice_profile.get("ghostwriting_rules", {}), indent=2)
+    content_strategy = json.dumps(voice_profile.get("content_strategy", {}), indent=2)
 
-    return f"""You are a ghostwriter. Write a LinkedIn post for this person.
+    return f"""You are an expert ghostwriter. Write a LinkedIn post that is INDISTINGUISHABLE from the original author.
 
-VOICE PROFILE:
-{json.dumps(voice_profile, indent=2)}
+## WHO THIS PERSON IS
+{executive_summary}
 
-THEIR PAST POSTS (for style reference — match the voice, do NOT copy content):
-{posts_block}
+## WRITING STYLE GUIDE
+{writing_style}
 
-RULES:
-- Match their exact tone, sentence length, and structure patterns
-- Use their vocabulary and phrasing style
-- Follow their typical post structure (see post_structures in the profile)
-- No hashtag spam (max 2-3 relevant hashtags, only if they typically use them)
+## VOICE DNA
+{voice_dna}
+
+## HOW THEY THINK
+{thinking}
+
+## HOOK PATTERNS
+{hooks}
+
+## CONTENT STRATEGY
+{content_strategy}
+
+## GHOSTWRITING RULES
+{rules}
+
+## YOUR RULES
+- Match their EXACT tone, sentence length, line break patterns, and structure
+- Use their signature phrases and vocabulary naturally
+- Follow their typical post templates (see writing_style_guide.post_templates)
+- Apply their hook patterns — open the post the way they would
+- Match their punctuation, emoji, and formatting habits precisely
+- No hashtag spam (only use hashtags if and how they typically use them)
 - No corporate buzzwords unless they use them
 - Keep it under 2500 characters
 - Output ONLY the post text, nothing else — no preamble, no explanation"""
 
 
 async def retrieve_context(state: PostGenState) -> dict:
-    """Load voice profile and retrieve similar posts via RAG."""
+    """Load the persona report (voice profile) from the database."""
     db = get_supabase()
     user_result = db.table("users").select("voice_profile").eq("id", state["user_id"]).execute()
 
     if not user_result.data or not user_result.data[0].get("voice_profile"):
         return {
             "voice_profile": {},
-            "similar_posts": [],
             "system_prompt": "",
             "draft": "[ERROR] No voice profile found. Please complete onboarding first.",
         }
 
     voice_profile = user_result.data[0]["voice_profile"]
-    similar_posts = await similarity_search(state["user_id"], state["prompt"], limit=5)
-    system_prompt = _build_system_prompt(voice_profile, similar_posts)
+    system_prompt = _build_system_prompt(voice_profile)
 
     return {
         "voice_profile": voice_profile,
-        "similar_posts": similar_posts,
         "system_prompt": system_prompt,
     }
 
@@ -75,7 +93,7 @@ async def generate_draft(state: PostGenState) -> dict:
         return {}
 
     llm = ChatOpenAI(
-        model="gpt-5-mini",
+        model="gpt-4.1-mini",
         api_key=settings.OPENAI_API_KEY,
         max_tokens=4000,
     )
@@ -133,7 +151,7 @@ async def generate_post_stream(user_id: str, prompt: str) -> AsyncGenerator[str,
     """
     db = get_supabase()
 
-    # Load voice profile
+    # Load persona report
     user_result = db.table("users").select("voice_profile").eq("id", user_id).execute()
     if not user_result.data:
         yield "[ERROR] No user profile found. Please complete onboarding first."
@@ -143,13 +161,11 @@ async def generate_post_stream(user_id: str, prompt: str) -> AsyncGenerator[str,
         yield "[ERROR] No voice profile found. Please complete onboarding first."
         return
 
-    # RAG: retrieve similar posts
-    similar_posts = await similarity_search(user_id, prompt, limit=5)
-    system_prompt = _build_system_prompt(voice_profile, similar_posts)
+    system_prompt = _build_system_prompt(voice_profile)
 
     # Stream from LLM
     llm = ChatOpenAI(
-        model="gpt-5-mini",
+        model="gpt-4.1-mini",
         api_key=settings.OPENAI_API_KEY,
         max_tokens=4000,
         streaming=True,

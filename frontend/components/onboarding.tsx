@@ -59,28 +59,43 @@ export default function Onboarding({
         const status = await apiGet<{
           scrape_status: string;
           posts_count: number;
-          embeddings_count: number;
         }>("/api/scrape/status");
 
         if (status.scrape_status === "done") {
           setStatusMessage(
-            `Done! Analyzed ${status.posts_count} posts and created ${status.embeddings_count} embeddings.`
+            `Done! Analyzed ${status.posts_count} posts and built your persona report.`
           );
           setStep("done");
           clearInterval(interval);
         } else if (status.scrape_status === "running") {
-          if (status.posts_count > 0 && status.embeddings_count === 0) {
+          if (status.posts_count > 0) {
             setStatusMessage(
-              `Scraped ${status.posts_count} posts. Building embeddings...`
-            );
-          } else if (status.embeddings_count > 0) {
-            setStatusMessage(
-              `${status.posts_count} posts embedded. Building your voice profile...`
+              `Scraped ${status.posts_count} posts. Starting analysis...`
             );
           }
+        } else if (status.scrape_status === "analyzing_style") {
+          setStatusMessage(
+            `Analyzing writing style across ${status.posts_count} posts...`
+          );
+        } else if (status.scrape_status === "analyzing_thinking") {
+          setStatusMessage(
+            `Mapping thinking patterns and worldview...`
+          );
+        } else if (status.scrape_status === "analyzing_strategy") {
+          setStatusMessage(
+            `Analyzing content strategy and engagement patterns...`
+          );
+        } else if (status.scrape_status === "analyzing_language") {
+          setStatusMessage(
+            `Extracting linguistic fingerprint and voice DNA...`
+          );
+        } else if (status.scrape_status === "synthesizing") {
+          setStatusMessage(
+            `Synthesizing comprehensive persona report...`
+          );
         } else if (status.scrape_status === "error") {
           setError(
-            "Something went wrong during scraping. Please try again."
+            "Something went wrong during analysis. Please try again."
           );
           setStep("linkedin-url");
           clearInterval(interval);
@@ -95,8 +110,8 @@ export default function Onboarding({
 
   const pipelineSteps = [
     { icon: <Scan className="h-4 w-4" />, label: "Scrape posts" },
-    { icon: <Brain className="h-4 w-4" />, label: "Build embeddings" },
-    { icon: <Sparkles className="h-4 w-4" />, label: "Create voice profile" },
+    { icon: <Brain className="h-4 w-4" />, label: "Analyze writing" },
+    { icon: <Sparkles className="h-4 w-4" />, label: "Build persona" },
   ];
 
   return (

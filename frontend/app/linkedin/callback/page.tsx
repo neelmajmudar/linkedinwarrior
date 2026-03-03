@@ -14,6 +14,13 @@ function LinkedInCallbackContent() {
 
   useEffect(() => {
     async function handleCallback() {
+      const authError = searchParams.get("error");
+      if (authError) {
+        setStatus("error");
+        setErrorMsg("LinkedIn authentication failed. Please try again.");
+        return;
+      }
+
       const accountId = searchParams.get("account_id");
       if (!accountId) {
         setStatus("error");
