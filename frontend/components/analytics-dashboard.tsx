@@ -36,6 +36,7 @@ import {
   Check,
   AlertCircle,
   X,
+  BarChart3,
 } from "lucide-react";
 
 interface MetricTrend {
@@ -265,7 +266,7 @@ function PostInteractionsSection({
 }
 
 export default function AnalyticsDashboard() {
-  const { data, isLoading } = useAnalytics();
+  const { data, isLoading, isError } = useAnalytics();
   const refreshMutation = useRefreshAnalytics();
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPostText, setSelectedPostText] = useState<string>("");
@@ -274,6 +275,18 @@ export default function AnalyticsDashboard() {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+        <BarChart3 className="h-10 w-10 text-gray-300" />
+        <p className="text-gray-500 text-sm font-medium">No analytics data yet</p>
+        <p className="text-gray-400 text-xs max-w-xs">
+          Analytics will appear once you start publishing posts. Try refreshing after publishing your first post.
+        </p>
       </div>
     );
   }

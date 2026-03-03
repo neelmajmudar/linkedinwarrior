@@ -87,6 +87,7 @@ export default function ContentList() {
   const pubTotalPages = Math.max(1, Math.ceil(pubTotal / PAGE_SIZE));
 
   const loading = activeQuery.isLoading;
+  const loadError = activeQuery.isError;
 
   function invalidateContent() {
     qc.invalidateQueries({ queryKey: ["content"] });
@@ -194,7 +195,7 @@ export default function ContentList() {
     );
   }
 
-  if (activeTotal === 0 && pubTotal === 0) {
+  if (loadError || (activeTotal === 0 && pubTotal === 0)) {
     return (
       <div className="text-center py-16 animate-fade-in">
         <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gray-100 mb-4">
