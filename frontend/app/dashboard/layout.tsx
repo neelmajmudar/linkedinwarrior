@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { apiPost } from "@/lib/api";
+import { apiPost, apiGet } from "@/lib/api";
 import { usePersona, useLinkedinStatus, useGmailStatus } from "@/lib/queries";
 import dynamic from "next/dynamic";
 import { TaskNotificationProvider, useTaskNotifications } from "@/components/task-notifications";
@@ -50,6 +50,9 @@ const Onboarding = dynamic(() => import("@/components/onboarding"), {
       </div>
     </div>
   ),
+});
+const GuidedTour = dynamic(() => import("@/components/guided-tour"), {
+  ssr: false,
 });
 
 const linkedinTabs = [
@@ -216,7 +219,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const linkedinConnected = linkedinQuery.data?.connected ?? false;
   const gmailConnected = gmailQuery.data?.connected ?? false;
 
   // Derive onboarding status — memo to avoid re-render jitter
@@ -227,8 +229,33 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     return "done";
   }, [personaQuery.isLoading, personaQuery.isError, personaQuery.data]);
 
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
-  const showOnboarding = onboardingStatus === "needed" && !onboardingDismissed;
+  // Tour & onboarding state (persisted in localStorage)
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      localStorage.getItem("linkedinwarrior-tour-active") === "true" ||
+      localStorage.getItem("linkedinwarrior-tour-complete") === "true"
+    );
+  });
+  const [tourActive, setTourActive] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("linkedinwarrior-tour-active") === "true";
+  });
+  const [personaStatus, setPersonaStatus] = useState("");
+  const [personaReady, setPersonaReady] = useState(false);
+
+  // Update personaReady when onboardingStatus changes
+  useEffect(() => {
+    if (onboardingStatus === "done") setPersonaReady(true);
+  }, [onboardingStatus]);
+
+  // Use query data when available; fall back to onboarding state (if user completed
+  // onboarding, they must have connected LinkedIn — covers query loading/error).
+  const linkedinConnected =
+    linkedinQuery.data?.connected ?? (onboardingDismissed && !linkedinQuery.isError ? true : false);
+
+  const showOnboarding =
+    onboardingStatus === "needed" && !onboardingDismissed && !tourActive;
 
   // Register router-based navigation for task notification toasts
   const navigateToTab = useCallback(
@@ -250,7 +277,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     setNavigateTo(navigateToTab);
   }, [setNavigateTo, navigateToTab]);
 
-  // Listen for LinkedIn auth popup callback
+  // Listen for LinkedIn auth popup callback (postMessage + localStorage fallback)
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.type === "linkedin-connected") {
@@ -258,9 +285,65 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         setConnecting(false);
       }
     }
+    function handleStorage(event: StorageEvent) {
+      if (event.key === "linkedin-connected") {
+        linkedinQuery.refetch();
+        setConnecting(false);
+      }
+    }
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, [linkedinQuery]);
+
+  // Poll persona build status during tour or while waiting
+  useEffect(() => {
+    if (personaReady) return;
+    if (!tourActive && !onboardingDismissed) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const status = await apiGet<{
+          scrape_status: string;
+          posts_count: number;
+        }>("/api/scrape/status");
+
+        const s = status.scrape_status;
+        if (s === "done") {
+          setPersonaStatus("Voice profile ready!");
+          setPersonaReady(true);
+          personaQuery.refetch();
+          clearInterval(interval);
+        } else if (s === "running") {
+          setPersonaStatus(
+            status.posts_count > 0
+              ? `Scraped ${status.posts_count} posts...`
+              : "Scraping your LinkedIn posts..."
+          );
+        } else if (s === "analyzing_style") {
+          setPersonaStatus("Analyzing writing style...");
+        } else if (s === "analyzing_thinking") {
+          setPersonaStatus("Mapping thinking patterns...");
+        } else if (s === "analyzing_strategy") {
+          setPersonaStatus("Analyzing content strategy...");
+        } else if (s === "analyzing_language") {
+          setPersonaStatus("Extracting linguistic fingerprint...");
+        } else if (s === "synthesizing") {
+          setPersonaStatus("Synthesizing persona report...");
+        } else if (s === "error") {
+          setPersonaStatus("Error building profile. Please try again.");
+          clearInterval(interval);
+        }
+      } catch {
+        // keep polling
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [tourActive, onboardingDismissed, personaReady, personaQuery]);
 
   async function connectLinkedin() {
     setConnecting(true);
@@ -282,27 +365,54 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Determine what to show in the content area
-  const mainContent = (() => {
-    if (onboardingStatus === "loading") {
-      return (
-        <div className="space-y-4 animate-fade-in">
-          <div className="skeleton h-8 w-48 rounded" />
-          <div className="skeleton h-4 w-72 rounded" />
-          <div className="skeleton h-32 w-full rounded-lg" />
-        </div>
-      );
+  async function handleAnalyze(username: string) {
+    try {
+      await apiPost("/api/scrape", {
+        linkedin_username: username,
+        max_posts: 200,
+      });
+    } catch (err) {
+      console.error("Failed to start scrape:", err);
     }
-    if (showOnboarding) {
-      return (
-        <div className="animate-fade-in">
-          <Onboarding onComplete={() => setOnboardingDismissed(true)} />
-        </div>
-      );
-    }
-    return <div className="animate-fade-in">{children}</div>;
-  })();
+    setOnboardingDismissed(true);
+    setTourActive(true);
+    localStorage.setItem("linkedinwarrior-tour-active", "true");
+    router.push("/dashboard/generate");
+  }
 
+  function handleTourComplete() {
+    setTourActive(false);
+    localStorage.removeItem("linkedinwarrior-tour-active");
+    localStorage.setItem("linkedinwarrior-tour-complete", "true");
+  }
+
+  // ── Loading state (only block for fresh users who haven't started onboarding) ──
+  if (onboardingStatus === "loading" && !onboardingDismissed) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-warm-500 flex items-center justify-center animate-pulse-glow">
+            <Sword className="h-5 w-5 text-white" />
+          </div>
+          <div className="skeleton h-2 w-24 rounded-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Full-screen onboarding ──
+  if (showOnboarding) {
+    return (
+      <Onboarding
+        linkedinConnected={linkedinConnected}
+        connecting={connecting}
+        onConnectLinkedin={connectLinkedin}
+        onAnalyze={handleAnalyze}
+      />
+    );
+  }
+
+  // ── Normal dashboard ──
   return (
     <div className="min-h-screen bg-white flex">
       {/* ── Sidebar ── */}
@@ -337,8 +447,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav sections */}
-        {!showOnboarding && (
-          <nav className="flex-1 overflow-y-auto px-2 py-3">
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
             {/* LinkedIn section */}
             {sidebarOpen && (
               <div className="px-2 mb-1.5">
@@ -381,8 +490,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
                 return <SidebarLink key={t.id} tab={t} isActive={isActive} collapsed={!sidebarOpen} />;
               })}
             </div>
-          </nav>
-        )}
+        </nav>
 
         {/* Bottom: connection status + sign out */}
         <div className="border-t border-gray-200 px-2 py-3 space-y-1">
@@ -433,10 +541,28 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "ml-56" : "ml-[52px]"
         }`}
       >
-        <main className={showOnboarding ? "" : "max-w-4xl mx-auto px-6 py-8"}>
-          {mainContent}
+        {/* Processing banner */}
+        {!personaReady && onboardingDismissed && !tourActive && (
+          <div className="sticky top-0 z-30 bg-warm-50 border-b border-warm-200 px-4 py-2.5 flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-warm-500" />
+            <span className="text-sm text-warm-700">
+              {personaStatus || "Building your voice profile..."}
+            </span>
+          </div>
+        )}
+        <main className="max-w-4xl mx-auto px-6 py-8">
+          <div className="animate-fade-in">{children}</div>
         </main>
       </div>
+
+      {/* ── Guided Tour Overlay ── */}
+      {tourActive && (
+        <GuidedTour
+          onComplete={handleTourComplete}
+          personaReady={personaReady}
+          personaStatus={personaStatus}
+        />
+      )}
     </div>
   );
 }
