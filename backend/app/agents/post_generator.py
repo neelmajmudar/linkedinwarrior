@@ -1,7 +1,7 @@
-"""LangGraph agent for generating LinkedIn posts using the persona report."""
+"""LangGraph agent for generating LinkedIn posts using the persona report and RAG."""
 
 import json
-from typing import AsyncGenerator, TypedDict
+from typing import AsyncGenerator, List, TypedDict
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
@@ -9,19 +9,21 @@ from langgraph.graph import StateGraph, END
 
 from app.config import settings
 from app.db import get_supabase
+from app.services.embeddings import search_similar_posts
 
 
 class PostGenState(TypedDict):
     user_id: str
     prompt: str
     voice_profile: dict
+    reference_posts: List[dict]
     system_prompt: str
     draft: str
     draft_id: str
 
 
-def _build_system_prompt(voice_profile: dict) -> str:
-    """Build a system prompt from the comprehensive persona report."""
+def _build_system_prompt(voice_profile: dict, reference_posts: List[dict] | None = None) -> str:
+    """Build a system prompt from the persona report and RAG reference posts."""
     # Extract key sections for a focused ghostwriting prompt
     executive_summary = voice_profile.get("executive_summary", "")
     writing_style = json.dumps(voice_profile.get("writing_style_guide", {}), indent=2)
@@ -30,6 +32,20 @@ def _build_system_prompt(voice_profile: dict) -> str:
     hooks = json.dumps(voice_profile.get("hook_patterns", {}), indent=2)
     rules = json.dumps(voice_profile.get("ghostwriting_rules", {}), indent=2)
     content_strategy = json.dumps(voice_profile.get("content_strategy", {}), indent=2)
+
+    # Build reference posts section from RAG results
+    reference_section = ""
+    if reference_posts:
+        examples = []
+        for i, post in enumerate(reference_posts, 1):
+            similarity = post.get("similarity", 0)
+            content = post.get("content", "").strip()
+            examples.append(f"### Example {i} (relevance: {similarity:.0%})\n{content}")
+        reference_section = "\n\n## REFERENCE POSTS FROM THIS AUTHOR\n" \
+            "These are real posts by this author on similar topics. Study them carefully to match their\n" \
+            "exact style, structure, vocabulary, and tone. Use them as concrete templates — not to copy,\n" \
+            "but to deeply internalize how this person writes about related subjects.\n\n" \
+            + "\n\n".join(examples)
 
     return f"""You are an expert ghostwriter. Write a LinkedIn post that is INDISTINGUISHABLE from the original author.
 
@@ -52,7 +68,7 @@ def _build_system_prompt(voice_profile: dict) -> str:
 {content_strategy}
 
 ## GHOSTWRITING RULES
-{rules}
+{rules}{reference_section}
 
 ## YOUR RULES
 - Match their EXACT tone, sentence length, line break patterns, and structure
@@ -60,6 +76,7 @@ def _build_system_prompt(voice_profile: dict) -> str:
 - Follow their typical post templates (see writing_style_guide.post_templates)
 - Apply their hook patterns — open the post the way they would
 - Match their punctuation, emoji, and formatting habits precisely
+- Study the REFERENCE POSTS closely — they show exactly how this person writes about similar topics
 - No hashtag spam (only use hashtags if and how they typically use them)
 - No corporate buzzwords unless they use them
 - Keep it under 2500 characters
@@ -67,22 +84,39 @@ def _build_system_prompt(voice_profile: dict) -> str:
 
 
 async def retrieve_context(state: PostGenState) -> dict:
-    """Load the persona report (voice profile) from the database."""
+    """Load the persona report and retrieve similar posts via RAG."""
     db = get_supabase()
     user_result = db.table("users").select("voice_profile").eq("id", state["user_id"]).execute()
 
     if not user_result.data or not user_result.data[0].get("voice_profile"):
         return {
             "voice_profile": {},
+            "reference_posts": [],
             "system_prompt": "",
             "draft": "[ERROR] No voice profile found. Please complete onboarding first.",
         }
 
     voice_profile = user_result.data[0]["voice_profile"]
-    system_prompt = _build_system_prompt(voice_profile)
+
+    # RAG: retrieve similar posts from the user's own post history
+    reference_posts = []
+    try:
+        reference_posts = await search_similar_posts(
+            user_id=state["user_id"],
+            query=state["prompt"],
+            match_count=8,
+        )
+        if reference_posts:
+            print(f"[post_gen] RAG retrieved {len(reference_posts)} reference posts for prompt: {state['prompt'][:60]}")
+    except Exception as e:
+        # Don't fail generation if RAG is unavailable
+        print(f"[post_gen] RAG retrieval failed (continuing without): {e}")
+
+    system_prompt = _build_system_prompt(voice_profile, reference_posts)
 
     return {
         "voice_profile": voice_profile,
+        "reference_posts": reference_posts,
         "system_prompt": system_prompt,
     }
 
@@ -161,7 +195,20 @@ async def generate_post_stream(user_id: str, prompt: str) -> AsyncGenerator[str,
         yield "[ERROR] No voice profile found. Please complete onboarding first."
         return
 
-    system_prompt = _build_system_prompt(voice_profile)
+    # RAG: retrieve similar posts from the user's own post history
+    reference_posts = []
+    try:
+        reference_posts = await search_similar_posts(
+            user_id=user_id,
+            query=prompt,
+            match_count=8,
+        )
+        if reference_posts:
+            print(f"[post_gen] RAG retrieved {len(reference_posts)} reference posts for prompt: {prompt[:60]}")
+    except Exception as e:
+        print(f"[post_gen] RAG retrieval failed (continuing without): {e}")
+
+    system_prompt = _build_system_prompt(voice_profile, reference_posts)
 
     # Stream from LLM
     llm = ChatOpenAI(

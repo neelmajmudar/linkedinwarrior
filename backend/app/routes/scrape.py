@@ -3,13 +3,14 @@ from app.auth import get_current_user
 from app.db import get_supabase
 from app.models import ScrapeRequest, ScrapeStatusResponse
 from app.services.scraper import scrape_linkedin_posts
+from app.services.embeddings import reembed_all_posts_for_user
 from app.agents.persona_analyzer import build_voice_profile
 
 router = APIRouter(prefix="/api/scrape", tags=["scrape"])
 
 
 async def _run_full_pipeline(user_id: str, linkedin_username: str, max_posts: int):
-    """Background task: scrape → multi-pass persona analysis."""
+    """Background task: scrape → embed posts → multi-pass persona analysis."""
     db = get_supabase()
     try:
         print(f"[pipeline] Starting scrape for {linkedin_username}")
@@ -18,6 +19,16 @@ async def _run_full_pipeline(user_id: str, linkedin_username: str, max_posts: in
         db.table("users").update({"scrape_status": "error"}).eq("id", user_id).execute()
         print(f"[pipeline] Scrape failed for user={user_id}: {e}")
         return
+
+    # Generate vector embeddings for RAG (runs in parallel with persona analysis prep)
+    try:
+        print(f"[pipeline] Generating embeddings for user={user_id}")
+        db.table("users").update({"scrape_status": "embedding"}).eq("id", user_id).execute()
+        count = await reembed_all_posts_for_user(user_id)
+        print(f"[pipeline] Embedded {count} posts for user={user_id}")
+    except Exception as e:
+        # Embeddings are non-critical; continue with persona analysis
+        print(f"[pipeline] Embedding failed (continuing): {e}")
 
     try:
         print(f"[pipeline] Starting persona analysis for user={user_id}")
