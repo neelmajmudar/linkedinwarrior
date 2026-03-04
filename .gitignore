@@ -39,3 +39,12 @@ celerybeat-schedule*
 # Reports
 SCALING_REPORT.html
 www_imagineai_me.html
+
+# Supabase CLI temp files
+supabase/.temp/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# One-off scripts with credentials
+backend/scripts/apply_embeddings_schema.py
