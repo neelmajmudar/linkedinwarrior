@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { apiPost, apiGet } from "@/lib/api";
-import { usePersona, useLinkedinStatus, useGmailStatus } from "@/lib/queries";
+import { usePersona, useLinkedinStatus, useGmailStatus, useOrgs } from "@/lib/queries";
+import OrgSwitcher from "@/components/org-switcher";
 import dynamic from "next/dynamic";
 import { TaskNotificationProvider, useTaskNotifications } from "@/components/task-notifications";
 import type { Session } from "@supabase/supabase-js";
@@ -23,6 +24,7 @@ import {
   Mail,
   PanelLeftClose,
   PanelLeftOpen,
+  Users,
 } from "lucide-react";
 
 const AuthPage = dynamic(() => import("@/components/auth-page"), {
@@ -66,6 +68,10 @@ const linkedinTabs = [
 
 const emailTabs = [
   { id: "email", label: "Email", icon: Mail, href: "/dashboard/email" },
+];
+
+const teamTabs = [
+  { id: "team", label: "Team", icon: Users, href: "/dashboard/team" },
 ];
 
 // ── Auth hook ──
@@ -446,6 +452,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* Org switcher */}
+        <div className="px-2 py-2 border-b border-gray-200">
+          <OrgSwitcher collapsed={!sidebarOpen} />
+        </div>
+
         {/* Nav sections */}
         <nav className="flex-1 overflow-y-auto px-2 py-3">
             {/* LinkedIn section */}
@@ -487,6 +498,29 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             <div className="space-y-0.5">
               {emailTabs.map((t) => {
                 const isActive = pathname === t.href;
+                return <SidebarLink key={t.id} tab={t} isActive={isActive} collapsed={!sidebarOpen} />;
+              })}
+            </div>
+
+            {/* Separator */}
+            <div className="my-3 mx-2 border-t border-gray-200" />
+
+            {/* Team section */}
+            {sidebarOpen && (
+              <div className="px-2 mb-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  Team
+                </span>
+              </div>
+            )}
+            {!sidebarOpen && (
+              <div className="flex justify-center mb-1.5">
+                <Users className="h-3.5 w-3.5 text-gray-400" />
+              </div>
+            )}
+            <div className="space-y-0.5">
+              {teamTabs.map((t) => {
+                const isActive = pathname.startsWith(t.href);
                 return <SidebarLink key={t.id} tab={t} isActive={isActive} collapsed={!sidebarOpen} />;
               })}
             </div>
@@ -541,8 +575,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "ml-56" : "ml-[52px]"
         }`}
       >
-        {/* Processing banner */}
-        {!personaReady && onboardingDismissed && !tourActive && (
+        {/* Processing banner — only show after persona query has loaded (prevents flash on hard refresh) */}
+        {!personaReady && onboardingDismissed && !tourActive && onboardingStatus !== "loading" && (
           <div className="sticky top-0 z-30 bg-warm-50 border-b border-warm-200 px-4 py-2.5 flex items-center justify-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin text-warm-500" />
             <span className="text-sm text-warm-700">

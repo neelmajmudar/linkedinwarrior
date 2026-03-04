@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     BACKEND_URL: str = "http://localhost:8000"
     REDIS_URL: str = "redis://localhost:6379/0"
     UNIPILE_WEBHOOK_SECRET: str = ""
+    RESEND_API_KEY: str = ""
 
     # Scaling
     WEB_WORKERS: int = 4

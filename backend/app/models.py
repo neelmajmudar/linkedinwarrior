@@ -159,3 +159,53 @@ class EditDraftRequest(BaseModel):
 
 class AutoSendPreferences(BaseModel):
     categories: List[str] = []
+
+
+# --- Organization models ---
+
+class CreateOrgRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    slug: Optional[str] = Field(None, min_length=2, max_length=50, pattern=r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
+
+
+class UpdateOrgRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    settings: Optional[dict] = None
+
+
+class InviteRequest(BaseModel):
+    email: str = Field(..., min_length=5)
+    role: str = Field(default="editor", pattern=r"^(admin|editor|viewer)$")
+
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: str = Field(..., pattern=r"^(admin|editor|viewer)$")
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+
+
+class OrgMemberResponse(BaseModel):
+    id: str
+    user_id: str
+    role: str
+    display_name: Optional[str] = None
+    color: Optional[str] = None
+    email: Optional[str] = None
+    joined_at: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class OrgResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    created_by: str
+    settings: Optional[dict] = None
+    created_at: Optional[str] = None
+    role: Optional[str] = None
+    member_count: Optional[int] = None
+
+    model_config = {"from_attributes": True}

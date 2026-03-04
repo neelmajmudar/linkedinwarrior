@@ -12,6 +12,44 @@ from app.rate_limit import rate_limit
 router = APIRouter(prefix="/api/content", tags=["content"])
 
 
+def _verify_content_access(db, content_id: str, user: dict, require_fields: str = "id, status"):
+    """Fetch a content item verifying the user has access.
+
+    Access is granted if:
+    - The user owns the content item, OR
+    - The content belongs to an org where the user is an owner or admin.
+
+    Returns the content row dict or raises 404.
+    """
+    # Always include user_id and org_id for access checks
+    fields = require_fields
+    if fields != "*":
+        for f in ("user_id", "org_id"):
+            if f not in fields:
+                fields += f", {f}"
+    result = db.table("content_items").select(fields).eq("id", content_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Content item not found")
+    item = result.data[0]
+
+    # Owner always has access
+    if item.get("user_id") == user["id"]:
+        return item
+
+    # Org members with editor+ role can access org content
+    org_id = item.get("org_id")
+    if org_id:
+        member = db.table("org_members") \
+            .select("role") \
+            .eq("org_id", org_id) \
+            .eq("user_id", user["id"]) \
+            .execute()
+        if member.data and member.data[0]["role"] in ("owner", "admin", "editor"):
+            return item
+
+    raise HTTPException(status_code=404, detail="Content item not found")
+
+
 @router.post("/generate", dependencies=[Depends(rate_limit("content_generate", 20, 3600))])
 async def generate_content(
     payload: GenerateRequest,
@@ -19,8 +57,10 @@ async def generate_content(
 ):
     """Generate a LinkedIn post draft via SSE streaming."""
 
+    org_id = user.get("active_org_id")
+
     async def event_stream():
-        async for token in generate_post_stream(user["id"], payload.prompt):
+        async for token in generate_post_stream(user["id"], payload.prompt, org_id=org_id):
             yield f"data: {json.dumps({'token': token})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -33,18 +73,19 @@ async def generate_content_async(
     user: dict = Depends(get_current_user),
 ):
     """Start post generation as a background task. Returns a task_id for polling."""
+    org_id = user.get("active_org_id")
     task = create_task(
         user_id=user["id"],
         task_type=TaskType.generate,
-        coro=_run_generate(user["id"], payload.prompt),
+        coro=_run_generate(user["id"], payload.prompt, org_id=org_id),
         meta={"prompt": payload.prompt},
     )
     return {"task_id": task.id, "status": "pending"}
 
 
-async def _run_generate(user_id: str, prompt: str) -> dict:
+async def _run_generate(user_id: str, prompt: str, org_id: str | None = None) -> dict:
     """Background coroutine that generates a post and returns the draft info."""
-    full_text = await generate_post(user_id, prompt)
+    full_text = await generate_post(user_id, prompt, org_id=org_id)
     db = get_supabase()
     # Fetch the latest draft that was just saved by generate_post
     result = db.table("content_items") \
@@ -62,15 +103,67 @@ async def _run_generate(user_id: str, prompt: str) -> dict:
 async def list_content(
     status: str | None = None,
     exclude_status: str | None = None,
+    org_id: str | None = Query(None, description="Filter by organization (team calendar mode)"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(10, ge=1, le=200, description="Items per page"),
     user: dict = Depends(get_current_user),
 ):
-    """List all content items for the current user, optionally filtered by status."""
+    """List content items. If org_id is provided, returns all org members' content with member info."""
     db = get_supabase()
     offset = (page - 1) * page_size
 
-    # Count query (separate from data query to avoid chaining issues)
+    if org_id:
+        # Verify membership
+        member = db.table("org_members") \
+            .select("role") \
+            .eq("org_id", org_id) \
+            .eq("user_id", user["id"]) \
+            .execute()
+        if not member.data:
+            raise HTTPException(status_code=403, detail="Not a member of this organization")
+
+        # Build org-scoped query — all content tagged to this org
+        count_query = db.table("content_items").select("id", count="exact").eq("org_id", org_id)
+        if status:
+            count_query = count_query.eq("status", status)
+        if exclude_status:
+            count_query = count_query.neq("status", exclude_status)
+        count_result = count_query.execute()
+        total = count_result.count or 0
+
+        data_query = db.table("content_items").select("*").eq("org_id", org_id).order("created_at", desc=True)
+        if status:
+            data_query = data_query.eq("status", status)
+        if exclude_status:
+            data_query = data_query.neq("status", exclude_status)
+        data_result = data_query.range(offset, offset + page_size - 1).execute()
+
+        # Enrich with member display info
+        members_result = db.table("org_members") \
+            .select("user_id, display_name, color") \
+            .eq("org_id", org_id) \
+            .execute()
+        member_map = {m["user_id"]: m for m in (members_result.data or [])}
+
+        items = []
+        for item in (data_result.data or []):
+            m = member_map.get(item.get("user_id"), {})
+            items.append({
+                **item,
+                "member_display_name": m.get("display_name"),
+                "member_color": m.get("color"),
+                "member_user_id": item.get("user_id"),
+            })
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "has_next": (offset + page_size) < total,
+        }
+
+    # Default: personal content for current user
     count_query = db.table("content_items").select("id", count="exact").eq("user_id", user["id"])
     if status:
         count_query = count_query.eq("status", status)
@@ -79,7 +172,6 @@ async def list_content(
     count_result = count_query.execute()
     total = count_result.count or 0
 
-    # Data query
     data_query = db.table("content_items").select("*").eq("user_id", user["id"]).order("created_at", desc=True)
     if status:
         data_query = data_query.eq("status", status)
@@ -100,10 +192,8 @@ async def list_content(
 async def get_content(content_id: str, user: dict = Depends(get_current_user)):
     """Get a single content item."""
     db = get_supabase()
-    result = db.table("content_items").select("*").eq("id", content_id).eq("user_id", user["id"]).execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Content item not found")
-    return result.data[0]
+    item = _verify_content_access(db, content_id, user, require_fields="*")
+    return item
 
 
 @router.patch("/{content_id}")
@@ -115,13 +205,11 @@ async def update_content(
     """Update a content item (body, status, scheduled_at)."""
     db = get_supabase()
 
-    # Verify ownership
-    existing = db.table("content_items").select("id, status").eq("id", content_id).eq("user_id", user["id"]).execute()
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Content item not found")
+    # Verify ownership or org admin/owner access
+    existing_item = _verify_content_access(db, content_id, user)
 
     # Don't allow editing published posts
-    if existing.data[0]["status"] == "published":
+    if existing_item["status"] == "published":
         raise HTTPException(status_code=400, detail="Cannot edit a published post")
 
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
@@ -142,13 +230,11 @@ async def delete_content(content_id: str, user: dict = Depends(get_current_user)
     """Delete a draft content item."""
     db = get_supabase()
 
-    existing = db.table("content_items").select("id, status").eq("id", content_id).eq("user_id", user["id"]).execute()
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Content item not found")
-    if existing.data[0]["status"] == "published":
+    existing_item = _verify_content_access(db, content_id, user)
+    if existing_item["status"] == "published":
         raise HTTPException(status_code=400, detail="Cannot delete a published post")
 
-    db.table("content_items").delete().eq("id", content_id).eq("user_id", user["id"]).execute()
+    db.table("content_items").delete().eq("id", content_id).execute()
     return {"status": "deleted"}
 
 
@@ -161,10 +247,8 @@ async def upload_image(
     """Upload an image for a content item. Stores in Supabase Storage."""
     db = get_supabase()
 
-    existing = db.table("content_items").select("id, status").eq("id", content_id).eq("user_id", user["id"]).execute()
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Content item not found")
-    if existing.data[0]["status"] == "published":
+    existing_item = _verify_content_access(db, content_id, user)
+    if existing_item["status"] == "published":
         raise HTTPException(status_code=400, detail="Cannot add image to a published post")
 
     # Read file and upload to Supabase Storage
