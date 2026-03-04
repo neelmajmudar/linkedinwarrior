@@ -1,4 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const { supabase } = await import("./supabase");
@@ -131,4 +133,63 @@ export async function apiStream(
     }
   }
   onDone();
+}
+
+/**
+ * Call a Supabase Edge Function for low-latency reads.
+ * Falls back to the regular backend API if SUPABASE_URL is not configured.
+ */
+export async function edgeGet<T = unknown>(
+  functionName: string,
+  params?: Record<string, string>,
+  backendPath?: string
+): Promise<T> {
+  // Fallback to backend if edge functions aren't configured
+  if (!SUPABASE_URL) {
+    if (backendPath) return apiGet<T>(backendPath);
+    throw new Error("Edge functions not configured and no fallback path");
+  }
+
+  const { supabase } = await import("./supabase");
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("Not authenticated");
+  }
+
+  const url = new URL(`${SUPABASE_URL}/functions/v1/${functionName}`);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      // On edge function failure, fall back to backend
+      if (backendPath) return apiGet<T>(backendPath);
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || err.detail || res.statusText);
+    }
+    return res.json();
+  } catch (e) {
+    // Network errors / timeouts -> fall back to backend
+    if (backendPath) return apiGet<T>(backendPath);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
