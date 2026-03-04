@@ -24,6 +24,10 @@ export const queryKeys = {
     ["email", "inbox", page, category] as const,
   emailDetail: (id: string) => ["email", "detail", id] as const,
   emailAutoSend: ["email", "auto-send"] as const,
+  orgs: ["orgs"] as const,
+  orgDetail: (orgId: string) => ["org", orgId] as const,
+  orgCalendar: (orgId: string) => ["org-calendar", orgId] as const,
+  orgAnalytics: (orgId: string) => ["org-analytics", orgId] as const,
 };
 
 // ── Persona / Onboarding ──
@@ -538,5 +542,188 @@ export function useReprocessAllEmails() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email"] });
     },
+  });
+}
+
+// ── Organizations / Teams ──
+
+interface OrgData {
+  id: string;
+  name: string;
+  slug: string;
+  created_by: string;
+  settings: Record<string, unknown> | null;
+  created_at: string;
+  role: string;
+  member_count: number;
+}
+
+interface OrgListResponse {
+  orgs: OrgData[];
+  active_org_id: string | null;
+}
+
+export interface OrgMember {
+  id: string;
+  user_id: string;
+  role: string;
+  display_name: string | null;
+  color: string | null;
+  email?: string | null;
+  joined_at: string | null;
+}
+
+interface OrgInvite {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+}
+
+interface OrgDetailResponse extends OrgData {
+  members: OrgMember[];
+  pending_invites: OrgInvite[];
+}
+
+export function useOrgs() {
+  return useQuery({
+    queryKey: queryKeys.orgs,
+    queryFn: () => apiGet<OrgListResponse>("/api/orgs"),
+  });
+}
+
+export function useOrgDetail(orgId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.orgDetail(orgId || ""),
+    queryFn: () => apiGet<OrgDetailResponse>(`/api/orgs/${orgId}`),
+    enabled: !!orgId,
+  });
+}
+
+export function useCreateOrg() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; slug?: string }) =>
+      apiPost<OrgData>("/api/orgs", body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.orgs });
+    },
+  });
+}
+
+export function useUpdateOrg() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      body,
+    }: {
+      orgId: string;
+      body: { name?: string; settings?: Record<string, unknown> };
+    }) => apiPatch(`/api/orgs/${orgId}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org"] });
+      qc.invalidateQueries({ queryKey: queryKeys.orgs });
+    },
+  });
+}
+
+export function useDeleteOrg() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orgId: string) => apiDelete(`/api/orgs/${orgId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.orgs });
+    },
+  });
+}
+
+export function useSwitchOrg() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orgId: string | null) =>
+      orgId
+        ? apiPost(`/api/orgs/${orgId}/switch`)
+        : apiPost("/api/orgs/switch-personal"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.orgs });
+      qc.invalidateQueries({ queryKey: ["content"] });
+      qc.invalidateQueries({ queryKey: queryKeys.analytics });
+    },
+  });
+}
+
+export function useInviteMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      email,
+      role,
+    }: {
+      orgId: string;
+      email: string;
+      role: string;
+    }) => apiPost(`/api/orgs/${orgId}/invite`, { email, role }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org"] });
+    },
+  });
+}
+
+export function useAcceptInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) =>
+      apiPost<{ status: string; org_id: string; role?: string }>(
+        "/api/orgs/accept-invite",
+        { token }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.orgs });
+    },
+  });
+}
+
+export function useUpdateMemberRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      userId,
+      role,
+    }: {
+      orgId: string;
+      userId: string;
+      role: string;
+    }) => apiPatch(`/api/orgs/${orgId}/members/${userId}`, { role }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org"] });
+    },
+  });
+}
+
+export function useRemoveMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId, userId }: { orgId: string; userId: string }) =>
+      apiDelete(`/api/orgs/${orgId}/members/${userId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org"] });
+      qc.invalidateQueries({ queryKey: queryKeys.orgs });
+    },
+  });
+}
+
+export function useOrgCalendar(orgId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.orgCalendar(orgId || ""),
+    queryFn: () =>
+      apiGet<{
+        items: (ContentItem & { member_display_name?: string; member_color?: string; member_user_id?: string })[];
+      }>(`/api/content?org_id=${orgId}&page=1&page_size=200`),
+    enabled: !!orgId,
   });
 }

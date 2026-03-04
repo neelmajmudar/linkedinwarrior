@@ -177,7 +177,7 @@ def build_post_generator_graph() -> StateGraph:
 
 # --- Streaming interface for the API ---
 
-async def generate_post_stream(user_id: str, prompt: str) -> AsyncGenerator[str, None]:
+async def generate_post_stream(user_id: str, prompt: str, org_id: str | None = None) -> AsyncGenerator[str, None]:
     """Generate a LinkedIn post as a streaming response.
 
     Yields individual text tokens as they arrive from the LLM.
@@ -231,17 +231,20 @@ async def generate_post_stream(user_id: str, prompt: str) -> AsyncGenerator[str,
             yield token
 
     # Save as draft
-    db.table("content_items").insert({
+    insert_data = {
         "user_id": user_id,
         "prompt": prompt,
         "body": full_text.strip(),
         "status": "draft",
-    }).execute()
+    }
+    if org_id:
+        insert_data["org_id"] = org_id
+    db.table("content_items").insert(insert_data).execute()
 
 
-async def generate_post(user_id: str, prompt: str) -> str:
+async def generate_post(user_id: str, prompt: str, org_id: str | None = None) -> str:
     """Generate a LinkedIn post (non-streaming). Returns the full text."""
     full_text = ""
-    async for token in generate_post_stream(user_id, prompt):
+    async for token in generate_post_stream(user_id, prompt, org_id=org_id):
         full_text += token
     return full_text

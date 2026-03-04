@@ -6,6 +6,7 @@ import {
   useRefreshAnalytics,
   usePostInteractions,
   useSendConnectionRequest,
+  useOrgs,
 } from "@/lib/queries";
 import {
   LineChart,
@@ -268,6 +269,10 @@ function PostInteractionsSection({
 export default function AnalyticsDashboard() {
   const { data, isLoading, isError } = useAnalytics();
   const refreshMutation = useRefreshAnalytics();
+  const orgsQuery = useOrgs();
+  const activeOrgId = orgsQuery.data?.active_org_id ?? null;
+  const activeOrg = orgsQuery.data?.orgs?.find((o) => o.id === activeOrgId);
+  const isTeamMode = !!activeOrgId;
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [selectedPostText, setSelectedPostText] = useState<string>("");
 
@@ -371,10 +376,12 @@ export default function AnalyticsDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl tracking-tight text-[#1a1a1a] mb-1">
-            LinkedIn <span className="gradient-text">Analytics</span>
+            {isTeamMode ? "Team " : "LinkedIn "}<span className="gradient-text">Analytics</span>
           </h2>
           <p className="text-sm text-gray-500">
-            Track your engagement, followers, and post performance over time.
+            {isTeamMode
+              ? `Aggregated metrics across all ${activeOrg?.name ?? "team"} members.`
+              : "Track your engagement, followers, and post performance over time."}
           </p>
         </div>
         <button

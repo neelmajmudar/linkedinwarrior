@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { apiPatch, apiDelete, getAuthHeaders } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAllContent } from "@/lib/queries";
+import { useAllContent, useOrgs, useOrgCalendar, useOrgDetail } from "@/lib/queries";
+import { useOrgRealtime } from "@/lib/use-realtime";
 import {
   format,
   startOfMonth,
@@ -44,6 +46,10 @@ interface ContentItem {
   scheduled_at: string | null;
   published_at: string | null;
   created_at: string;
+  user_id?: string;
+  member_display_name?: string;
+  member_color?: string;
+  member_user_id?: string;
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -57,9 +63,44 @@ type ViewMode = "month" | "week";
 
 export default function CalendarView() {
   const qc = useQueryClient();
+  const orgsQuery = useOrgs();
+  const activeOrgId = orgsQuery.data?.active_org_id ?? null;
+  const orgCalendarQuery = useOrgCalendar(activeOrgId);
+  const orgDetailQuery = useOrgDetail(activeOrgId);
   const contentQuery = useAllContent();
-  const items = contentQuery.data?.items ?? [];
-  const loading = contentQuery.isLoading;
+
+  // Subscribe to real-time updates for the active org
+  useOrgRealtime(activeOrgId);
+
+  const isTeamMode = !!activeOrgId;
+  const items: ContentItem[] = isTeamMode
+    ? (orgCalendarQuery.data?.items ?? [])
+    : (contentQuery.data?.items ?? []);
+  const loading = isTeamMode ? orgCalendarQuery.isLoading : contentQuery.isLoading;
+
+  // Team member filter
+  const orgMembers = orgDetailQuery.data?.members ?? [];
+  const [hiddenMembers, setHiddenMembers] = useState<Set<string>>(new Set());
+
+  function toggleMember(userId: string) {
+    setHiddenMembers((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  const userRole = orgDetailQuery.data?.role ?? "viewer";
+  const canEditInOrg = ["owner", "admin", "editor"].includes(userRole);
+
+  // Get current user ID for ownership checks
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUserId(session?.user?.id ?? null);
+    });
+  }, []);
 
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -87,6 +128,9 @@ export default function CalendarView() {
 
   function invalidateContent() {
     qc.invalidateQueries({ queryKey: ["content"] });
+    if (activeOrgId) {
+      qc.invalidateQueries({ queryKey: ["org-calendar"] });
+    }
   }
 
   const monthDays = useMemo(() => {
@@ -104,6 +148,10 @@ export default function CalendarView() {
 
   function getItemsForDay(day: Date): ContentItem[] {
     return items.filter((item) => {
+      // Team mode: filter by hidden members
+      if (isTeamMode && item.member_user_id && hiddenMembers.has(item.member_user_id)) {
+        return false;
+      }
       const dateStr = item.published_at || item.scheduled_at || item.created_at;
       if (!dateStr) return false;
       return isSameDay(new Date(dateStr), day);
@@ -211,13 +259,19 @@ export default function CalendarView() {
 
   const weekDayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  const canEdit = (status: string) => status !== "published";
+  const canEdit = (item: ContentItem) => {
+    if (item.status === "published") return false;
+    if (!isTeamMode) return true;
+    // In team mode: viewers cannot edit, editors/admins/owners can edit all org content
+    if (userRole === "viewer") return false;
+    return canEditInOrg; // true for editor, admin, owner
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-          Content <span className="gradient-text">Calendar</span>
+          {isTeamMode ? "Team " : "Content "}<span className="gradient-text">Calendar</span>
         </h2>
         <div className="flex items-center gap-1 bg-gray-100 rounded-full p-0.5">
           <button
@@ -280,6 +334,32 @@ export default function CalendarView() {
         </button>
       </div>
 
+      {/* Team member filter */}
+      {isTeamMode && orgMembers.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400 font-medium">Members:</span>
+          {orgMembers.map((m) => (
+            <button
+              key={m.user_id}
+              onClick={() => toggleMember(m.user_id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                hiddenMembers.has(m.user_id)
+                  ? "border-gray-200 text-gray-400 bg-gray-50"
+                  : "border-gray-200 text-[#1a1a1a] bg-white shadow-sm"
+              }`}
+            >
+              <div
+                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                  hiddenMembers.has(m.user_id) ? "opacity-30" : ""
+                }`}
+                style={{ backgroundColor: m.color || "#6366f1" }}
+              />
+              {m.display_name || "Unknown"}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Calendar grid */}
       <div className="glass-card overflow-hidden">
         {/* Header */}
@@ -333,10 +413,15 @@ export default function CalendarView() {
                       {dayItems.slice(0, 3).map((item) => (
                         <div key={item.id} className="flex items-center gap-1">
                           <div
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status] || "bg-[#94a3b8]"}`}
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              isTeamMode && item.member_color ? "" : (STATUS_DOT[item.status] || "bg-[#94a3b8]")
+                            }`}
+                            style={isTeamMode && item.member_color ? { backgroundColor: item.member_color } : undefined}
                           />
                           <span className="text-[10px] text-gray-400 truncate">
-                            {item.body.slice(0, 25)}...
+                            {isTeamMode && item.member_display_name
+                              ? `${item.member_display_name}: ${item.body.slice(0, 18)}...`
+                              : `${item.body.slice(0, 25)}...`}
                           </span>
                         </div>
                       ))}
@@ -391,10 +476,15 @@ export default function CalendarView() {
                       {dayItems.slice(0, 5).map((item) => (
                         <div key={item.id} className="flex items-center gap-1">
                           <div
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[item.status] || "bg-[#94a3b8]"}`}
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              isTeamMode && item.member_color ? "" : (STATUS_DOT[item.status] || "bg-[#94a3b8]")
+                            }`}
+                            style={isTeamMode && item.member_color ? { backgroundColor: item.member_color } : undefined}
                           />
                           <span className="text-[10px] text-gray-500 truncate">
-                            {item.body.slice(0, 35)}...
+                            {isTeamMode && item.member_display_name
+                              ? `${item.member_display_name}: ${item.body.slice(0, 25)}...`
+                              : `${item.body.slice(0, 35)}...`}
                           </span>
                         </div>
                       ))}
@@ -432,9 +522,24 @@ export default function CalendarView() {
                   {/* Header row */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div
-                        className={`w-2 h-2 rounded-full ${STATUS_DOT[item.status] || "bg-[#94a3b8]"}`}
-                      />
+                      {isTeamMode && item.member_color ? (
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
+                          style={{ backgroundColor: item.member_color }}
+                          title={item.member_display_name || undefined}
+                        >
+                          {(item.member_display_name || "?")[0].toUpperCase()}
+                        </div>
+                      ) : (
+                        <div
+                          className={`w-2 h-2 rounded-full ${STATUS_DOT[item.status] || "bg-[#94a3b8]"}`}
+                        />
+                      )}
+                      {isTeamMode && item.member_display_name && (
+                        <span className="text-xs font-medium text-gray-500">
+                          {item.member_display_name}
+                        </span>
+                      )}
                       <span className="text-xs font-medium capitalize text-[#1a1a1a]">
                         {item.status}
                       </span>
@@ -445,7 +550,7 @@ export default function CalendarView() {
                         </span>
                       )}
                     </div>
-                    {canEdit(item.status) && !isEditing && !isDeleteTarget && (
+                    {canEdit(item) && !isEditing && !isDeleteTarget && (
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => startEdit(item)}

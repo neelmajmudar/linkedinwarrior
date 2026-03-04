@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.scheduler import start_scheduler, stop_scheduler
-from app.routes import scrape, persona, content, linkedin, analytics, engagement, creator_analysis, tasks, scheduler_status, email, email_webhook
+from app.routes import scrape, persona, content, linkedin, analytics, engagement, creator_analysis, tasks, scheduler_status, email, email_webhook, organizations
 
 
 @asynccontextmanager
@@ -46,6 +46,7 @@ app.include_router(tasks.router)
 app.include_router(scheduler_status.router)
 app.include_router(email.router)
 app.include_router(email_webhook.router)
+app.include_router(organizations.router)
 
 
 @app.get("/health")
