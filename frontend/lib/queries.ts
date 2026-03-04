@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPatch, apiDelete } from "./api";
+import { apiGet, apiPost, apiPatch, apiDelete, edgeGet } from "./api";
 
 // ── Keys ──
 
@@ -32,7 +32,9 @@ export function usePersona() {
   return useQuery({
     queryKey: queryKeys.persona,
     queryFn: () =>
-      apiGet<{ voice_profile: unknown; linkedin_username: string | null }>(
+      edgeGet<{ voice_profile: unknown; linkedin_username: string | null }>(
+        "persona",
+        undefined,
         "/api/persona"
       ),
     retry: false,
@@ -75,7 +77,9 @@ export function useActiveContent(page: number, pageSize = 10) {
   return useQuery({
     queryKey: queryKeys.contentActive(page),
     queryFn: () =>
-      apiGet<PaginatedContent>(
+      edgeGet<PaginatedContent>(
+        "content-list",
+        { exclude_status: "published", page: String(page), page_size: String(pageSize) },
         `/api/content?exclude_status=published&page=${page}&page_size=${pageSize}`
       ),
   });
@@ -85,7 +89,9 @@ export function usePublishedContent(page: number, pageSize = 10, enabled = true)
   return useQuery({
     queryKey: queryKeys.contentPublished(page),
     queryFn: () =>
-      apiGet<PaginatedContent>(
+      edgeGet<PaginatedContent>(
+        "content-list",
+        { status: "published", page: String(page), page_size: String(pageSize) },
         `/api/content?status=published&page=${page}&page_size=${pageSize}`
       ),
     enabled,
@@ -96,7 +102,9 @@ export function usePublishedContentCount() {
   return useQuery({
     queryKey: queryKeys.contentPublishedCount,
     queryFn: async () => {
-      const data = await apiGet<PaginatedContent>(
+      const data = await edgeGet<PaginatedContent>(
+        "content-list",
+        { status: "published", page: "1", page_size: "1" },
         `/api/content?status=published&page=1&page_size=1`
       );
       return data.total ?? 0;
@@ -108,7 +116,11 @@ export function useAllContent() {
   return useQuery({
     queryKey: queryKeys.contentAll,
     queryFn: () =>
-      apiGet<{ items: ContentItem[] }>("/api/content?page=1&page_size=100"),
+      edgeGet<{ items: ContentItem[] }>(
+        "content-list",
+        { page: "1", page_size: "100" },
+        "/api/content?page=1&page_size=100"
+      ),
   });
 }
 
@@ -117,7 +129,12 @@ export function useAllContent() {
 export function useEngagementTopics() {
   return useQuery({
     queryKey: queryKeys.engagementTopics,
-    queryFn: () => apiGet<{ topics: string[] }>("/api/engagement/topics"),
+    queryFn: () =>
+      edgeGet<{ topics: string[] }>(
+        "engagement",
+        { action: "topics" },
+        "/api/engagement/topics"
+      ),
   });
 }
 
@@ -125,7 +142,9 @@ export function useEngagementRemaining() {
   return useQuery({
     queryKey: queryKeys.engagementRemaining,
     queryFn: () =>
-      apiGet<{ remaining_today: number; daily_limit: number }>(
+      edgeGet<{ remaining_today: number; daily_limit: number }>(
+        "engagement",
+        { action: "remaining" },
         "/api/engagement/remaining"
       ),
   });
@@ -155,7 +174,9 @@ export function useEngagementHistory(page: number, pageSize = 10, enabled = true
   return useQuery({
     queryKey: queryKeys.engagementHistory(page),
     queryFn: () =>
-      apiGet<HistoryResponse>(
+      edgeGet<HistoryResponse>(
+        "engagement",
+        { action: "history", status: "posted", page: String(page), page_size: String(pageSize) },
         `/api/engagement/history?status=posted&page=${page}&page_size=${pageSize}`
       ),
     enabled,
@@ -166,7 +187,9 @@ export function useEngagementHistoryCount() {
   return useQuery({
     queryKey: queryKeys.engagementHistoryCount,
     queryFn: async () => {
-      const data = await apiGet<HistoryResponse>(
+      const data = await edgeGet<HistoryResponse>(
+        "engagement",
+        { action: "history", status: "posted", page: "1", page_size: "1" },
         `/api/engagement/history?status=posted&page=1&page_size=1`
       );
       return data.total;
@@ -221,7 +244,8 @@ interface AnalyticsData {
 export function useAnalytics() {
   return useQuery({
     queryKey: queryKeys.analytics,
-    queryFn: () => apiGet<AnalyticsData>("/api/analytics"),
+    queryFn: () =>
+      edgeGet<AnalyticsData>("analytics", undefined, "/api/analytics"),
   });
 }
 
@@ -407,9 +431,15 @@ export function useEmailInbox(
   return useQuery({
     queryKey: queryKeys.emailInbox(page, category),
     queryFn: () => {
-      let url = `/api/email/inbox?page=${page}&page_size=${pageSize}`;
-      if (category) url += `&category=${category}`;
-      return apiGet<EmailInboxResponse>(url);
+      const params: Record<string, string> = {
+        action: "inbox",
+        page: String(page),
+        page_size: String(pageSize),
+      };
+      if (category) params.category = category;
+      let backendUrl = `/api/email/inbox?page=${page}&page_size=${pageSize}`;
+      if (category) backendUrl += `&category=${category}`;
+      return edgeGet<EmailInboxResponse>("email-data", params, backendUrl);
     },
   });
 }
@@ -432,7 +462,12 @@ interface EmailDetailData extends EmailInboxItem {
 export function useEmailDetail(id: string | null) {
   return useQuery({
     queryKey: queryKeys.emailDetail(id || ""),
-    queryFn: () => apiGet<EmailDetailData>(`/api/email/${id}`),
+    queryFn: () =>
+      edgeGet<EmailDetailData>(
+        "email-data",
+        { action: "detail", id: id! },
+        `/api/email/${id}`
+      ),
     enabled: !!id,
   });
 }
@@ -441,7 +476,9 @@ export function useEmailAutoSendPreferences() {
   return useQuery({
     queryKey: queryKeys.emailAutoSend,
     queryFn: () =>
-      apiGet<{ auto_send_categories: string[] }>(
+      edgeGet<{ auto_send_categories: string[] }>(
+        "email-data",
+        { action: "preferences" },
         "/api/email/preferences/auto-send"
       ),
   });
