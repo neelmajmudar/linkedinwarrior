@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import {
   Mail,
-  Inbox,
   Send,
   RefreshCw,
   ChevronLeft,
@@ -195,8 +194,11 @@ export default function EmailPage() {
   // ── Not connected state ──
   if (gmailStatus.isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-12 h-12 rounded-xl bg-warm-50 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-warm-500" />
+        </div>
+        <span className="text-sm text-gray-400">Loading email...</span>
       </div>
     );
   }
@@ -204,8 +206,8 @@ export default function EmailPage() {
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-6">
-        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
-          <Mail className="h-8 w-8 text-red-500" />
+        <div className="w-16 h-16 rounded-2xl bg-warm-50 flex items-center justify-center">
+          <Mail className="h-8 w-8 text-warm-500" />
         </div>
         <div className="text-center">
           <h2 className="text-xl font-semibold text-gray-900">Connect your Gmail</h2>
@@ -217,7 +219,7 @@ export default function EmailPage() {
         <button
           onClick={connectGmail}
           disabled={connecting}
-          className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50 font-medium"
+          className="btn-primary px-6 py-3 flex items-center gap-2 font-medium"
         >
           {connecting ? (
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -236,10 +238,10 @@ export default function EmailPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
             <button
               onClick={() => setShowSettings(false)}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1.5 rounded-xl hover:bg-warm-50 transition-colors"
             >
               <ChevronLeft className="h-5 w-5 text-gray-600" />
             </button>
@@ -247,48 +249,52 @@ export default function EmailPage() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-amber-500" />
-            <h2 className="font-semibold text-gray-900">Auto-Send Categories</h2>
-          </div>
-          <p className="text-sm text-gray-500">
-            Emails in these categories will have their AI-generated reply automatically sent
-            without manual review. Use with caution.
-          </p>
+        <div className="section-card">
+          <div className="p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-amber-500" />
+              <h2 className="font-semibold text-gray-900">Auto-Send Categories</h2>
+            </div>
+            <p className="text-sm text-gray-500">
+              Emails in these categories will have their AI-generated reply automatically sent
+              without manual review. Use with caution.
+            </p>
 
-          <div className="space-y-2">
-            {AUTO_SEND_OPTIONS.map((opt) => (
-              <label
-                key={opt.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                <span className="text-sm font-medium text-gray-700">{opt.label}</span>
-                <div
-                  className={`relative w-10 h-6 rounded-full transition-colors ${
-                    currentAutoSend.includes(opt.id) ? "bg-green-500" : "bg-gray-300"
-                  }`}
-                  onClick={() => toggleAutoSend(opt.id)}
+            <div className="space-y-2">
+              {AUTO_SEND_OPTIONS.map((opt) => (
+                <label
+                  key={opt.id}
+                  className="flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:bg-warm-50 hover:border-warm-200 cursor-pointer transition-all"
                 >
+                  <span className="text-sm font-medium text-gray-700">{opt.label}</span>
                   <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                      currentAutoSend.includes(opt.id) ? "translate-x-4.5" : "translate-x-0.5"
+                    className={`relative w-10 h-6 rounded-full transition-colors ${
+                      currentAutoSend.includes(opt.id) ? "bg-green-500" : "bg-gray-300"
                     }`}
-                  />
-                </div>
-              </label>
-            ))}
+                    onClick={() => toggleAutoSend(opt.id)}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                        currentAutoSend.includes(opt.id) ? "translate-x-4.5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </div>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-3">
-          <h2 className="font-semibold text-gray-900">Gmail Connection</h2>
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <span className="text-green-700 font-medium">Connected</span>
-            {gmailStatus.data?.email_address && (
-              <span className="text-gray-500">({gmailStatus.data.email_address})</span>
-            )}
+        <div className="section-card">
+          <div className="p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Gmail Connection</h2>
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span className="text-green-700 font-medium">Connected</span>
+              {gmailStatus.data?.email_address && (
+                <span className="text-gray-500">({gmailStatus.data.email_address})</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -329,8 +335,9 @@ export default function EmailPage() {
         ) : email ? (
           <div className="space-y-4">
             {/* Email header */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-              <div className="flex items-start justify-between">
+            <div className="section-card">
+              <div className="p-5 space-y-3">
+                <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <h2 className="text-lg font-semibold text-gray-900">{email.subject || "(No subject)"}</h2>
                   <p className="text-sm text-gray-500">
@@ -381,75 +388,82 @@ export default function EmailPage() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
 
             {/* Original email body */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-2">
-              <h3 className="text-sm font-medium text-gray-500">Original Email</h3>
-              <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
-                {email.body_text || "(No body)"}
+            <div className="section-card">
+              <div className="p-5 space-y-3">
+                <h3 className="text-sm font-medium text-gray-500">Original Email</h3>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                  {email.body_text || "(No body)"}
+                </div>
               </div>
             </div>
 
             {/* Draft reply */}
             {email.draft && email.status !== "skipped" && (
-              <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                    <ArrowUpRight className="h-4 w-4 text-blue-500" />
-                    AI Draft Reply
-                    {email.draft.status === "sent" && (
-                      <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Sent</span>
-                    )}
-                  </h3>
-                </div>
-
-                {email.draft.status === "sent" ? (
-                  <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {email.draft.body}
-                  </div>
-                ) : (
-                  <>
-                    <textarea
-                      value={draftBody}
-                      onChange={(e) => {
-                        setDraftBody(e.target.value);
-                        setDraftDirty(true);
-                      }}
-                      rows={8}
-                      className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-700 resize-y focus:outline-none focus:ring-2 focus:ring-gray-200 leading-relaxed"
-                    />
-                    <div className="flex items-center justify-end gap-2">
-                      {draftDirty && (
-                        <button
-                          onClick={handleSaveDraft}
-                          disabled={editDraft.isPending}
-                          className="px-4 py-2 text-sm rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                        >
-                          {editDraft.isPending ? "Saving…" : "Save Draft"}
-                        </button>
+              <div className="section-card">
+                <div className="p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                      <ArrowUpRight className="h-4 w-4 text-blue-500" />
+                      AI Draft Reply
+                      {email.draft.status === "sent" && (
+                        <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Sent</span>
                       )}
-                      <button
-                        onClick={handleSendReply}
-                        disabled={sendReply.isPending || !draftBody.trim()}
-                        className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
-                      >
-                        {sendReply.isPending ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Send className="h-3.5 w-3.5" />
-                        )}
-                        Send Reply
-                      </button>
+                    </h3>
+                  </div>
+
+                  {email.draft.status === "sent" ? (
+                    <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {email.draft.body}
                     </div>
-                  </>
-                )}
+                  ) : (
+                    <>
+                      <textarea
+                        value={draftBody}
+                        onChange={(e) => {
+                          setDraftBody(e.target.value);
+                          setDraftDirty(true);
+                        }}
+                        rows={8}
+                        className="w-full border border-gray-200 rounded-xl p-4 text-sm text-gray-700 resize-y focus:outline-none focus:ring-2 focus:ring-warm-200 leading-relaxed"
+                      />
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        {draftDirty && (
+                          <button
+                            onClick={handleSaveDraft}
+                            disabled={editDraft.isPending}
+                            className="px-4 py-2 text-sm rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                          >
+                            {editDraft.isPending ? "Saving…" : "Save Draft"}
+                          </button>
+                        )}
+                        <button
+                          onClick={handleSendReply}
+                          disabled={sendReply.isPending || !draftBody.trim()}
+                          className="btn-primary px-5 py-2 text-sm flex items-center gap-1.5"
+                        >
+                          {sendReply.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Send className="h-3.5 w-3.5" />
+                          )}
+                          Send Reply
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
             {email.status === "skipped" && (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 text-center text-sm text-gray-500">
-                This email was classified as <span className="font-medium">{formatCategory(email.category || "")}</span> and skipped for reply generation.
+              <div className="section-card">
+                <div className="p-5 text-center text-sm text-gray-500 bg-gray-50">
+                  This email was classified as <span className="font-medium">{formatCategory(email.category || "")}</span> and skipped for reply generation.
+                </div>
               </div>
             )}
           </div>
@@ -464,21 +478,21 @@ export default function EmailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <Inbox className="h-5 w-5" />
-            Email Assistant
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            AI-categorized emails with auto-drafted replies in your voice
-          </p>
-        </div>
+      <div className="page-header-gradient rounded-2xl p-6 mb-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl tracking-tight text-[#1a1a1a]">
+              Email <span className="gradient-text">Assistant</span>
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              AI-categorized emails with auto-drafted replies in your voice
+            </p>
+          </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => reprocessAll.mutate()}
             disabled={reprocessAll.isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl border border-gray-200 hover:bg-warm-50 hover:border-warm-200 transition-all disabled:opacity-50"
           >
             {reprocessAll.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -490,17 +504,18 @@ export default function EmailPage() {
           <button
             onClick={() => inbox.refetch()}
             disabled={inbox.isRefetching}
-            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="p-2 rounded-xl border border-gray-200 hover:bg-warm-50 hover:border-warm-200 transition-all disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 text-gray-600 ${inbox.isRefetching ? "animate-spin" : ""}`} />
           </button>
           <button
             onClick={() => setShowSettings(true)}
-            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            className="p-2 rounded-xl border border-gray-200 hover:bg-warm-50 hover:border-warm-200 transition-all"
             title="Settings"
           >
             <Settings2 className="h-4 w-4 text-gray-600" />
           </button>
+        </div>
         </div>
       </div>
 
@@ -513,10 +528,10 @@ export default function EmailPage() {
               setActiveCategory(cat.id === "all" ? undefined : cat.id);
               setPage(1);
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-all ${
               (cat.id === "all" && !activeCategory) || activeCategory === cat.id
-                ? "bg-[#1a1a1a] text-white border-[#1a1a1a]"
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                ? "bg-warm-500 text-white border-warm-500"
+                : "bg-white text-gray-600 border-gray-200 hover:border-warm-200"
             }`}
           >
             {cat.label}
@@ -546,7 +561,7 @@ export default function EmailPage() {
               <button
                 key={email.id}
                 onClick={() => setSelectedEmailId(email.id)}
-                className="w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all group"
+                className="w-full text-left p-4 bg-white border border-gray-200 rounded-xl hover:border-warm-200 hover:shadow-sm transition-all group"
               >
                 <div className="flex items-start gap-3">
                   <StatusIcon className={`h-4 w-4 mt-1 flex-shrink-0 ${statusCfg.color}`} />

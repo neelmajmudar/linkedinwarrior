@@ -15,6 +15,7 @@ export default function AcceptInvitePage() {
     token ? "loading" : "no-token"
   );
   const [errorMsg, setErrorMsg] = useState("");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [orgId, setOrgId] = useState<string | null>(null);
   const acceptedRef = useRef(false);
 
@@ -40,8 +41,10 @@ export default function AcceptInvitePage() {
   if (status === "no-token") {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="glass-card p-8 text-center space-y-4 max-w-md">
-          <XCircle className="h-10 w-10 text-red-400 mx-auto" />
+        <div className="section-card p-10 text-center space-y-4 max-w-md">
+          <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center mx-auto">
+            <XCircle className="h-6 w-6 text-red-400" />
+          </div>
           <h2 className="text-lg font-medium text-[#1a1a1a]">Invalid Invite Link</h2>
           <p className="text-sm text-gray-500">
             This invite link is missing the required token. Please check the link from your email.
@@ -54,8 +57,10 @@ export default function AcceptInvitePage() {
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="glass-card p-8 text-center space-y-4 max-w-md">
-          <Loader2 className="h-10 w-10 animate-spin text-warm-500 mx-auto" />
+        <div className="section-card p-10 text-center space-y-4 max-w-md">
+          <div className="w-14 h-14 rounded-xl bg-warm-50 flex items-center justify-center mx-auto">
+            <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+          </div>
           <h2 className="text-lg font-medium text-[#1a1a1a]">Accepting Invite...</h2>
           <p className="text-sm text-gray-500">
             Joining the team, just a moment.
@@ -68,13 +73,15 @@ export default function AcceptInvitePage() {
   if (status === "error") {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="glass-card p-8 text-center space-y-4 max-w-md">
-          <XCircle className="h-10 w-10 text-red-400 mx-auto" />
+        <div className="section-card p-10 text-center space-y-4 max-w-md">
+          <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center mx-auto">
+            <XCircle className="h-6 w-6 text-red-400" />
+          </div>
           <h2 className="text-lg font-medium text-[#1a1a1a]">Invite Failed</h2>
           <p className="text-sm text-gray-500">{errorMsg}</p>
           <button
             onClick={() => router.push("/dashboard/team")}
-            className="px-4 py-2 text-sm rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors"
+            className="btn-primary px-4 py-2 text-sm"
           >
             Go to Team
           </button>
@@ -85,15 +92,17 @@ export default function AcceptInvitePage() {
 
   return (
     <div className="flex items-center justify-center py-16">
-      <div className="glass-card p-8 text-center space-y-4 max-w-md">
-        <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto" />
+      <div className="section-card p-10 text-center space-y-4 max-w-md">
+        <div className="w-14 h-14 rounded-xl bg-green-50 flex items-center justify-center mx-auto">
+          <CheckCircle2 className="h-6 w-6 text-green-500" />
+        </div>
         <h2 className="text-lg font-medium text-[#1a1a1a]">You&apos;re In!</h2>
         <p className="text-sm text-gray-500">
           You&apos;ve successfully joined the team. You can now see the shared calendar and collaborate with your team.
         </p>
         <button
           onClick={() => router.push("/dashboard/team")}
-          className="flex items-center gap-2 mx-auto px-4 py-2 text-sm rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors"
+          className="btn-primary px-4 py-2 text-sm flex items-center gap-2 mx-auto"
         >
           <Building2 className="h-4 w-4" />
           View Team

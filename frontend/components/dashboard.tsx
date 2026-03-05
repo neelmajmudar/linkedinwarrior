@@ -20,7 +20,6 @@ import {
   Linkedin,
   MessageSquare,
   BarChart3,
-  Zap,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -121,7 +120,14 @@ function DashboardInner() {
   }
 
   if (needsOnboarding) {
-    return <Onboarding onComplete={() => setNeedsOnboarding(false)} />;
+    return (
+      <Onboarding
+        linkedinConnected={linkedinConnected}
+        connecting={connecting}
+        onConnectLinkedin={connectLinkedin}
+        onAnalyze={() => setNeedsOnboarding(false)}
+      />
+    );
   }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -158,11 +164,11 @@ function DashboardInner() {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#fafafa]">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-3 flex items-center justify-between">
         <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity cursor-pointer">
-          <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-warm-500 flex items-center justify-center">
             <Sword className="h-4 w-4 text-white" />
           </div>
           <span className="text-lg tracking-tight text-[#1a1a1a]">
@@ -179,7 +185,7 @@ function DashboardInner() {
             <button
               onClick={connectLinkedin}
               disabled={connecting}
-              className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
+              className="btn-primary px-4 py-1.5 text-sm flex items-center gap-1.5"
             >
               {connecting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -191,7 +197,7 @@ function DashboardInner() {
           )}
           <button
             onClick={() => supabase.auth.signOut()}
-            className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
@@ -200,16 +206,16 @@ function DashboardInner() {
       </header>
 
       {/* Tab navigation */}
-      <nav className="border-b border-gray-200 px-6 bg-white">
-        <div className="max-w-4xl mx-auto flex gap-1">
+      <nav className="border-b border-gray-100 px-6 bg-white/60 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto flex gap-1">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all ${
                 tab === t.id
-                  ? "border-[#1a1a1a] text-[#1a1a1a]"
-                  : "border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300"
+                  ? "border-warm-500 text-[#1a1a1a]"
+                  : "border-transparent text-gray-400 hover:text-gray-700 hover:border-warm-200"
               }`}
             >
               {t.icon}
@@ -220,7 +226,7 @@ function DashboardInner() {
       </nav>
 
       {/* Content */}
-      <main className="max-w-4xl mx-auto px-6 py-8 animate-fade-in">
+      <main className="max-w-5xl mx-auto px-8 py-10">
         {tab === "generate" && <PostGenerator />}
         {tab === "posts" && <ContentList />}
         {tab === "calendar" && <CalendarView />}

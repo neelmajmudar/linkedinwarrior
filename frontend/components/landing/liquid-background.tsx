@@ -28,6 +28,7 @@ function createWarmGradientImage(): string {
 
 export default function LiquidBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const appRef = useRef<any>(null);
 
   const dispose = useCallback(() => {
@@ -52,6 +53,7 @@ export default function LiquidBackground() {
     (async () => {
       const url =
         "https://cdn.jsdelivr.net/npm/threejs-components@0.0.27/build/backgrounds/liquid1.min.js";
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore – external CDN module with no type declarations
       const mod = await import(/* webpackIgnore: true */ url);
       if (cancelled) return;

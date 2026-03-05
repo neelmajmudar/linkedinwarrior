@@ -37,6 +37,7 @@ import {
   ImagePlus,
   Image as ImageIcon,
 } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
 
 interface ContentItem {
   id: string;
@@ -95,6 +96,7 @@ export default function CalendarView() {
   const canEditInOrg = ["owner", "admin", "editor"].includes(userRole);
 
   // Get current user ID for ownership checks
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -269,38 +271,39 @@ export default function CalendarView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-          {isTeamMode ? "Team " : "Content "}<span className="gradient-text">Calendar</span>
-        </h2>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-full p-0.5">
-          <button
-            onClick={() => setViewMode("month")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full transition-colors ${
-              viewMode === "month"
-                ? "bg-white text-[#1a1a1a] shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <CalendarDays className="h-3.5 w-3.5" />
-            Month
-          </button>
-          <button
-            onClick={() => {
-              setViewMode("week");
-              setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full transition-colors ${
-              viewMode === "week"
-                ? "bg-white text-[#1a1a1a] shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <CalendarRange className="h-3.5 w-3.5" />
-            Week
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title={isTeamMode ? "Team" : "Content"}
+        titleAccent="Calendar"
+        actions={
+          <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-0.5">
+            <button
+              onClick={() => setViewMode("month")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                viewMode === "month"
+                  ? "bg-white text-[#1a1a1a] shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              Month
+            </button>
+            <button
+              onClick={() => {
+                setViewMode("week");
+                setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                viewMode === "week"
+                  ? "bg-white text-[#1a1a1a] shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              Week
+            </button>
+          </div>
+        }
+      />
 
       {/* Navigation */}
       <div className="flex items-center justify-between">
@@ -310,11 +313,11 @@ export default function CalendarView() {
               ? setCurrentMonth(subMonths(currentMonth, 1))
               : setCurrentWeekStart(subWeeks(currentWeekStart, 1))
           }
-          className="p-2 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-[#1a1a1a] transition-colors"
+          className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-warm-50 hover:border-warm-200 hover:text-[#1a1a1a] transition-all"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h3 className="text-lg tracking-tight text-[#1a1a1a]">
+        <h3 className="text-lg tracking-tight text-[#1a1a1a] font-medium">
           {viewMode === "month"
             ? format(currentMonth, "MMMM yyyy")
             : `${format(currentWeekStart, "MMM d")} – ${format(
@@ -328,7 +331,7 @@ export default function CalendarView() {
               ? setCurrentMonth(addMonths(currentMonth, 1))
               : setCurrentWeekStart(addWeeks(currentWeekStart, 1))
           }
-          className="p-2 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-[#1a1a1a] transition-colors"
+          className="p-2 rounded-xl border border-gray-200 text-gray-500 hover:bg-warm-50 hover:border-warm-200 hover:text-[#1a1a1a] transition-all"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
@@ -361,7 +364,7 @@ export default function CalendarView() {
       )}
 
       {/* Calendar grid */}
-      <div className="glass-card overflow-hidden">
+      <div className="section-card overflow-hidden">
         {/* Header */}
         <div className="grid grid-cols-7 border-b border-gray-200">
           {weekDayLabels.map((d) => (
@@ -504,8 +507,8 @@ export default function CalendarView() {
 
       {/* Selected day detail */}
       {selectedDay && (
-        <div className="space-y-3 animate-fade-in">
-          <h3 className="text-sm font-medium text-gray-500">
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-gray-500 px-1">
             {format(selectedDay, "EEEE, MMMM d, yyyy")}
           </h3>
           {selectedDayItems.length === 0 ? (
@@ -518,7 +521,7 @@ export default function CalendarView() {
               const isDeleteTarget = deletingId === item.id;
 
               return (
-                <div key={item.id} className="glass-card p-4 space-y-3">
+                <div key={item.id} className="section-card p-5 space-y-3">
                   {/* Header row */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

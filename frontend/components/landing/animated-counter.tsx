@@ -25,7 +25,7 @@ const AnimatedCounter = memo(function AnimatedCounter({
   useEffect(() => {
     if (!isInView) return;
 
-    let start = 0;
+    const start = 0; // eslint-disable-line @typescript-eslint/no-unused-vars
     const startTime = performance.now();
 
     const tick = (now: number) => {

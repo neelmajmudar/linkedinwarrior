@@ -39,6 +39,9 @@ import {
   X,
   BarChart3,
 } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
+import StatCard from "@/components/ui/stat-card";
+import SectionCard from "@/components/ui/section-card";
 
 interface MetricTrend {
   date: string;
@@ -50,6 +53,7 @@ interface MetricTrend {
   engagement_rate: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface AnalyticsData {
   summary: {
     total_posts: number;
@@ -148,7 +152,7 @@ function PostInteractionsSection({
   const hasError = data?.error || data?.api_errors?.length;
 
   return (
-    <div className="glass-card p-5 space-y-4">
+    <div className="section-card space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -278,16 +282,21 @@ export default function AnalyticsDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-12 h-12 rounded-xl bg-warm-50 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-warm-500" />
+        </div>
+        <p className="text-sm text-gray-400">Loading analytics...</p>
       </div>
     );
   }
 
   if (isError || !data) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-        <BarChart3 className="h-10 w-10 text-gray-300" />
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center">
+          <BarChart3 className="h-6 w-6 text-gray-300" />
+        </div>
         <p className="text-gray-500 text-sm font-medium">No analytics data yet</p>
         <p className="text-gray-400 text-xs max-w-xs">
           Analytics will appear once you start publishing posts. Try refreshing after publishing your first post.
@@ -373,51 +382,48 @@ export default function AnalyticsDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl tracking-tight text-[#1a1a1a] mb-1">
-            {isTeamMode ? "Team " : "LinkedIn "}<span className="gradient-text">Analytics</span>
-          </h2>
-          <p className="text-sm text-gray-500">
-            {isTeamMode
-              ? `Aggregated metrics across all ${activeOrg?.name ?? "team"} members.`
-              : "Track your engagement, followers, and post performance over time."}
-          </p>
-        </div>
-        <button
-          onClick={() => refreshMutation.mutate()}
-          disabled={refreshMutation.isPending}
-          className="btn-ghost px-3 py-1.5 text-sm flex items-center gap-1.5 border border-gray-200 rounded-full disabled:opacity-50"
-        >
-          {refreshMutation.isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          {refreshMutation.isPending ? "Refreshing..." : "Refresh Data"}
-        </button>
-      </div>
+      <PageHeader
+        title={isTeamMode ? "Team" : "LinkedIn"}
+        titleAccent="Analytics"
+        subtitle={isTeamMode
+          ? `Aggregated metrics across all ${activeOrg?.name ?? "team"} members.`
+          : "Track your engagement, followers, and post performance over time."}
+        actions={
+          <button
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            className="btn-ghost px-4 py-2 text-sm flex items-center gap-2 border border-gray-200 rounded-xl hover:border-warm-300 disabled:opacity-50 transition-colors"
+          >
+            {refreshMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {refreshMutation.isPending ? "Refreshing..." : "Refresh Data"}
+          </button>
+        }
+      />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {statCards.map((card) => (
-          <div key={card.label} className="glass-card p-4 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <span className={card.color}>{card.icon}</span>
-              <span className="text-xs text-gray-500">
-                {card.label}
-              </span>
-            </div>
-            <p className="text-2xl font-semibold tracking-tight text-[#1a1a1a]">{card.value}</p>
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {statCards.map((card, i) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            index={i}
+          />
         ))}
       </div>
 
       {/* Follower trend chart */}
       {followerData.length > 0 && (
-        <div className="glass-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-warm-500" />
+        <SectionCard index={1}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-warm-50 flex items-center justify-center">
+              <Users className="h-3.5 w-3.5 text-warm-500" />
+            </div>
             <h3 className="text-sm font-medium text-[#1a1a1a]">Followers Over Time</h3>
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -447,14 +453,16 @@ export default function AnalyticsDashboard() {
               />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </SectionCard>
       )}
 
       {/* Impressions Over Time */}
       {trendData.length > 0 && (
-        <div className="glass-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <Eye className="h-4 w-4 text-warm-400" />
+        <SectionCard index={2}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-warm-50 flex items-center justify-center">
+              <Eye className="h-3.5 w-3.5 text-warm-400" />
+            </div>
             <h3 className="text-sm font-medium text-[#1a1a1a]">Impressions Over Time</h3>
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -474,14 +482,16 @@ export default function AnalyticsDashboard() {
               <Area type="monotone" dataKey="impressions" stroke="#c69f87" fill="url(#impressionsFill)" strokeWidth={2} name="Impressions" />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </SectionCard>
       )}
 
       {/* Engagement Over Time (reactions, comments, reposts) */}
       {trendData.length > 0 && (
-        <div className="glass-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <Heart className="h-4 w-4 text-warm-500" />
+        <SectionCard index={3}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-warm-50 flex items-center justify-center">
+              <Heart className="h-3.5 w-3.5 text-warm-500" />
+            </div>
             <h3 className="text-sm font-medium text-[#1a1a1a]">Engagement Over Time</h3>
           </div>
           <ResponsiveContainer width="100%" height={240}>
@@ -498,14 +508,16 @@ export default function AnalyticsDashboard() {
               <Line type="monotone" dataKey="reposts" stroke="#c69f87" strokeWidth={2} dot={{ r: 2 }} name="Reposts" />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </SectionCard>
       )}
 
       {/* Engagement Rate Trend */}
       {trendData.length > 0 && (
-        <div className="glass-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-green-600" />
+        <SectionCard index={4}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
+            </div>
             <h3 className="text-sm font-medium text-[#1a1a1a]">Engagement Rate Trend</h3>
           </div>
           <ResponsiveContainer width="100%" height={200}>
@@ -526,14 +538,16 @@ export default function AnalyticsDashboard() {
               <Area type="monotone" dataKey="engagement_rate" stroke="#10b981" fill="url(#engRateFill)" strokeWidth={2} name="Eng. Rate" />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </SectionCard>
       )}
 
       {/* Post performance chart */}
       {postData.length > 0 && (
-        <div className="glass-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-warm-500" />
+        <SectionCard index={5}>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-lg bg-warm-50 flex items-center justify-center">
+              <TrendingUp className="h-3.5 w-3.5 text-warm-500" />
+            </div>
             <h3 className="text-sm font-medium text-[#1a1a1a]">Post Performance</h3>
           </div>
           <ResponsiveContainer width="100%" height={280}>
@@ -559,12 +573,12 @@ export default function AnalyticsDashboard() {
               <Bar dataKey="comments" fill="#69494a" radius={[4, 4, 0, 0]} name="Comments" />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </SectionCard>
       )}
 
       {/* Top posts table — sorted by views */}
       {sortedPosts.length > 0 && (
-        <div className="glass-card p-5 space-y-3">
+        <SectionCard index={6}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-[#1a1a1a]">Top Performing Posts</h3>
             <span className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -642,7 +656,7 @@ export default function AnalyticsDashboard() {
               </tbody>
             </table>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* Post Interactions — dedicated section */}
@@ -659,13 +673,17 @@ export default function AnalyticsDashboard() {
 
       {/* Empty state */}
       {!data?.top_posts?.length && !followerData.length && (
-        <div className="glass-card p-8 text-center space-y-2">
-          <TrendingUp className="h-8 w-8 mx-auto text-gray-300" />
-          <p className="text-sm text-gray-400">
-            No analytics data yet. Click &quot;Refresh Data&quot; to fetch your latest LinkedIn metrics,
-            or wait for the daily automatic snapshot.
-          </p>
-        </div>
+        <SectionCard index={1} className="text-center">
+          <div className="py-6 space-y-3">
+            <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center mx-auto">
+              <TrendingUp className="h-5 w-5 text-gray-300" />
+            </div>
+            <p className="text-sm text-gray-400">
+              No analytics data yet. Click &quot;Refresh Data&quot; to fetch your latest LinkedIn metrics,
+              or wait for the daily automatic snapshot.
+            </p>
+          </div>
+        </SectionCard>
       )}
     </div>
   );
