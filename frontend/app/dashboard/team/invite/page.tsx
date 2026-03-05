@@ -1,11 +1,30 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAcceptInvite } from "@/lib/queries";
 import { Loader2, CheckCircle2, XCircle, Building2 } from "lucide-react";
 
 export default function AcceptInvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-16">
+          <div className="section-card p-10 text-center space-y-4 max-w-md">
+            <div className="w-14 h-14 rounded-xl bg-warm-50 flex items-center justify-center mx-auto">
+              <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+            </div>
+            <h2 className="text-lg font-medium text-[#1a1a1a]">Loading...</h2>
+          </div>
+        </div>
+      }
+    >
+      <AcceptInviteContent />
+    </Suspense>
+  );
+}
+
+function AcceptInviteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const acceptInvite = useAcceptInvite();

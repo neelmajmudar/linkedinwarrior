@@ -212,7 +212,7 @@ export default function ContentList() {
     );
   }
 
-  function renderPostCard(item: ContentItem, idx: number) {
+  function renderPostCard(item: ContentItem) {
     return (
       <div
         key={item.id}
@@ -456,7 +456,7 @@ export default function ContentList() {
       {/* Active posts (drafts, approved, scheduled, failed) */}
       {activeItems.length > 0 && (
         <div className="space-y-3">
-          {activeItems.map((item, idx) => renderPostCard(item, idx))}
+          {activeItems.map((item) => renderPostCard(item))}
         </div>
       )}
 
@@ -510,7 +510,7 @@ export default function ContentList() {
                 <span className="text-xs text-gray-400">({pubTotal})</span>
               </div>
               <div className="border-t border-gray-100" />
-              {publishedItems.map((item, idx) => renderPostCard(item, idx))}
+              {publishedItems.map((item) => renderPostCard(item))}
 
               {/* Published pagination */}
               {pubTotalPages > 1 && (

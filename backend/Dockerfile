@@ -31,9 +31,11 @@ USER appuser
 # Expose port
 EXPOSE 8000
 
-# Health check
+# Health check (only applies to the web service; workers ignore it)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/health')"
 
-# Run the application with Gunicorn multi-worker production server
-CMD ["gunicorn", "app.main:app", "-c", "gunicorn.conf.py"]
+# Configurable start command via START_CMD env var
+# Default: Gunicorn web server. Override per-service for Celery workers.
+ENV START_CMD="gunicorn app.main:app -c gunicorn.conf.py"
+CMD ["sh", "-c", "$START_CMD"]

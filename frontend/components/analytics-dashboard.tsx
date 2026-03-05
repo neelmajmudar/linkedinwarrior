@@ -152,7 +152,7 @@ function PostInteractionsSection({
   const hasError = data?.error || data?.api_errors?.length;
 
   return (
-    <div className="section-card space-y-4">
+    <div className="section-card p-5 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
