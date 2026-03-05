@@ -16,6 +16,8 @@ import {
   ImagePlus,
   X,
 } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
+import SectionCard from "@/components/ui/section-card";
 
 export default function PostGenerator() {
   const [prompt, setPrompt] = useState("");
@@ -249,44 +251,42 @@ export default function PostGenerator() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl tracking-tight text-[#1a1a1a] mb-1">
-          Generate a <span className="gradient-text">Post</span>
-        </h2>
-        <p className="text-sm text-gray-500">
-          Describe what you want to post about. The AI will write it in your
-          voice.
-        </p>
-      </div>
+      <PageHeader
+        title="Generate a"
+        titleAccent="Post"
+        subtitle="Describe what you want to post about. The AI will write it in your voice."
+      />
 
       {/* Prompt input */}
-      <div className="glass-card p-4 flex gap-3">
-        <input
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !isGenerating && handleGenerate()}
-          placeholder="e.g. Share my thoughts on why most startups fail at hiring..."
-          className="input-field flex-1"
-          disabled={isGenerating}
-        />
-        <button
-          onClick={handleGenerate}
-          disabled={isGenerating || !prompt.trim()}
-          className="btn-primary px-5 py-2.5 flex items-center gap-2 text-sm shrink-0"
-        >
-          {isGenerating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-          Generate
-        </button>
-      </div>
+      <SectionCard index={1}>
+        <div className="flex gap-3">
+          <input
+            type="text"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !isGenerating && handleGenerate()}
+            placeholder="e.g. Share my thoughts on why most startups fail at hiring..."
+            className="input-field flex-1 !py-3 !px-4 !rounded-xl !text-base"
+            disabled={isGenerating}
+          />
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !prompt.trim()}
+            className="btn-primary px-6 py-3 flex items-center gap-2 text-sm shrink-0"
+          >
+            {isGenerating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Generate
+          </button>
+        </div>
+      </SectionCard>
 
       {/* Draft editor */}
       {(draft || isGenerating) && (
-        <div className="glass-card p-5 space-y-4 animate-fade-in">
+        <SectionCard index={2} className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-gray-500">
               Draft
@@ -425,12 +425,12 @@ export default function PostGenerator() {
 
           {/* Schedule picker */}
           {showScheduler && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-warm-50/50 border border-warm-200/50">
               <input
                 type="datetime-local"
                 value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
-                className="input-field !w-auto"
+                className="input-field !w-auto !rounded-lg"
               />
               <button
                 onClick={handleSchedule}
@@ -446,18 +446,18 @@ export default function PostGenerator() {
               </button>
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {/* Messages */}
       {message && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 border border-green-100 text-sm text-green-700 animate-fade-in">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100 text-sm text-emerald-700">
           <Check className="h-4 w-4 shrink-0" />
           {message}
         </div>
       )}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-100 text-sm text-red-600 animate-fade-in">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
           {error}
         </div>
       )}

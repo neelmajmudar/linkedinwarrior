@@ -41,11 +41,15 @@ export default function TeamSettingsPage() {
   if (!activeOrgId) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-          Team <span className="gradient-text">Settings</span>
-        </h2>
-        <div className="glass-card p-8 text-center space-y-4">
-          <Building2 className="h-10 w-10 text-gray-300 mx-auto" />
+        <div className="page-header-gradient rounded-2xl p-6">
+          <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
+            Team <span className="gradient-text">Settings</span>
+          </h2>
+        </div>
+        <div className="section-card p-10 text-center space-y-4">
+          <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center mx-auto">
+            <Building2 className="h-6 w-6 text-gray-300" />
+          </div>
           <p className="text-gray-500">
             No team selected. Use the org switcher in the sidebar to select a team.
           </p>
@@ -65,11 +69,15 @@ export default function TeamSettingsPage() {
   if (!canManage) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-          Team <span className="gradient-text">Settings</span>
-        </h2>
-        <div className="glass-card p-8 text-center space-y-4">
-          <Settings className="h-10 w-10 text-gray-300 mx-auto" />
+        <div className="page-header-gradient rounded-2xl p-6">
+          <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
+            Team <span className="gradient-text">Settings</span>
+          </h2>
+        </div>
+        <div className="section-card p-10 text-center space-y-4">
+          <div className="w-14 h-14 rounded-xl bg-gray-50 flex items-center justify-center mx-auto">
+            <Settings className="h-6 w-6 text-gray-300" />
+          </div>
           <p className="text-gray-500">
             Only admins and owners can manage team settings.
           </p>
@@ -106,91 +114,97 @@ export default function TeamSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-        Team <span className="gradient-text">Settings</span>
-      </h2>
+      <div className="page-header-gradient rounded-2xl p-6">
+        <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
+          Team <span className="gradient-text">Settings</span>
+        </h2>
+      </div>
 
       {/* General settings */}
-      <div className="glass-card p-5 space-y-4">
-        <h3 className="text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
-          <Settings className="h-4 w-4 text-warm-500" />
-          General
-        </h3>
+      <div className="section-card">
+        <div className="p-5 space-y-4">
+          <h3 className="text-sm font-medium text-[#1a1a1a] flex items-center gap-2">
+            <Settings className="h-4 w-4 text-warm-500" />
+            General
+          </h3>
 
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-500">Team Name</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSave()}
-            className="w-full max-w-md rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-warm-300"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-500">Slug</label>
-          <p className="text-sm text-gray-400">{org?.slug}</p>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-1.5 text-xs text-red-500">
-            <AlertCircle className="h-3 w-3" />
-            {error}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-gray-500">Team Name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              className="w-full max-w-md rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-warm-300"
+            />
           </div>
-        )}
-        {success && (
-          <div className="text-xs text-green-600">{success}</div>
-        )}
 
-        <button
-          onClick={handleSave}
-          disabled={saving || !name.trim()}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Save Changes
-        </button>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-gray-500">Slug</label>
+            <p className="text-sm text-gray-400">{org?.slug}</p>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-red-500">
+              <AlertCircle className="h-3 w-3" />
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="text-xs text-green-600">{success}</div>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={saving || !name.trim()}
+            className="btn-primary px-4 py-2 text-sm flex items-center gap-1.5"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Save Changes
+          </button>
+        </div>
       </div>
 
       {/* Danger zone — owner only */}
       {isOwner && (
-        <div className="glass-card p-5 space-y-4 border-red-100">
-          <h3 className="text-sm font-medium text-red-600 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            Danger Zone
-          </h3>
+        <div className="section-card border-red-100">
+          <div className="p-5 space-y-4">
+            <h3 className="text-sm font-medium text-red-600 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Danger Zone
+            </h3>
 
-          {confirmDelete ? (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-100 space-y-3">
-              <p className="text-sm text-red-700">
-                This will permanently delete <strong>{org?.name}</strong> and remove all members. Content items will remain but lose their org association. This action cannot be undone.
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleDelete}
-                  disabled={deleteOrg.isPending}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
-                >
-                  {deleteOrg.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                  Yes, Delete Organization
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="px-4 py-2 text-sm rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
-                >
-                  Cancel
-                </button>
+            {confirmDelete ? (
+              <div className="p-4 rounded-xl bg-red-50 border border-red-100 space-y-3">
+                <p className="text-sm text-red-700">
+                  This will permanently delete <strong>{org?.name}</strong> and remove all members. Content items will remain but lose their org association. This action cannot be undone.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteOrg.isPending}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                  >
+                    {deleteOrg.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Yes, Delete Organization
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-4 py-2 text-sm rounded-full border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-full border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete Organization
-            </button>
-          )}
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-full border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete Organization
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

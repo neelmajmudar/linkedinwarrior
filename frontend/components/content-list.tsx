@@ -7,7 +7,6 @@ import {
   useActiveContent,
   usePublishedContent,
   usePublishedContentCount,
-  queryKeys,
 } from "@/lib/queries";
 import { format } from "date-fns";
 import {
@@ -25,6 +24,7 @@ import {
   X,
   CalendarDays,
 } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
 
 interface ContentItem {
   id: string;
@@ -38,6 +38,7 @@ interface ContentItem {
   created_at: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface PaginatedResponse {
   items: ContentItem[];
   total: number;
@@ -188,8 +189,10 @@ export default function ContentList() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="w-12 h-12 rounded-xl bg-warm-50 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-warm-500" />
+        </div>
         <span className="text-sm text-gray-400">Loading posts...</span>
       </div>
     );
@@ -197,9 +200,9 @@ export default function ContentList() {
 
   if (loadError || (activeTotal === 0 && pubTotal === 0)) {
     return (
-      <div className="text-center py-16 animate-fade-in">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gray-100 mb-4">
-          <FileText className="h-7 w-7 text-gray-400" />
+      <div className="text-center py-20">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gray-50 mb-4">
+          <FileText className="h-6 w-6 text-gray-300" />
         </div>
         <p className="text-gray-500 mb-1">No posts yet</p>
         <p className="text-sm text-gray-400">
@@ -213,8 +216,7 @@ export default function ContentList() {
     return (
       <div
         key={item.id}
-        className="glass-card p-5 space-y-3 animate-fade-in"
-        style={{ animationDelay: `${idx * 50}ms` }}
+        className="section-card p-5 space-y-3"
       >
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -441,12 +443,15 @@ export default function ContentList() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl tracking-tight text-[#1a1a1a]">
-          My <span className="gradient-text">Posts</span>
-        </h2>
-        <span className="text-xs text-gray-400">{activeTotal + pubTotal} post{activeTotal + pubTotal !== 1 ? "s" : ""}</span>
-      </div>
+      <PageHeader
+        title="My"
+        titleAccent="Posts"
+        actions={
+          <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl font-medium">
+            {activeTotal + pubTotal} post{activeTotal + pubTotal !== 1 ? "s" : ""}
+          </span>
+        }
+      />
 
       {/* Active posts (drafts, approved, scheduled, failed) */}
       {activeItems.length > 0 && (
@@ -484,7 +489,7 @@ export default function ContentList() {
       <div className="pt-4">
         <button
           onClick={() => setShowHistory((prev) => !prev)}
-          className="btn-ghost w-full py-2.5 text-sm flex items-center justify-center gap-2 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+          className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2 border border-gray-200 rounded-xl hover:bg-warm-50 hover:border-warm-200 transition-all"
         >
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           {showHistory ? "Hide History" : "View Published History"}
@@ -496,7 +501,7 @@ export default function ContentList() {
 
       {/* Published posts section (shown on toggle) */}
       {showHistory && (
-        <div className="space-y-3 pt-2 animate-fade-in">
+        <div className="space-y-3 pt-2">
           {publishedItems.length > 0 ? (
             <>
               <div className="flex items-center gap-2">

@@ -19,9 +19,21 @@ const config: Config = {
           600: '#69494a',
           700: '#4a3233',
         },
+        sidebar: {
+          DEFAULT: '#ffffff',
+          text: '#6b7280',
+          hover: '#1a1a1a',
+          active: '#1a1a1a',
+          muted: '#9ca3af',
+          border: '#f0f0f0',
+          'hover-bg': 'rgba(0, 0, 0, 0.03)',
+        },
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      maxWidth: {
+        '5xl': '64rem',
       },
     },
   },

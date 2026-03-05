@@ -76,7 +76,7 @@ export default function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
         {open && (
           <div
             ref={ref}
-            className="absolute left-full top-0 ml-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+            className="absolute left-full top-0 ml-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50"
           >
             <DropdownContent
               orgs={orgs}
@@ -100,7 +100,7 @@ export default function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm hover:bg-gray-100 transition-colors"
+        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
       >
         {activeOrg ? (
           <Building2 className="h-4 w-4 text-warm-500 flex-shrink-0" />
@@ -118,7 +118,7 @@ export default function OrgSwitcher({ collapsed = false }: OrgSwitcherProps) {
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
           <DropdownContent
             orgs={orgs}
             activeOrgId={activeOrgId}
@@ -217,13 +217,13 @@ function DropdownContent({
               if (e.key === "Escape") onSetCreating(false);
             }}
             placeholder="Team name..."
-            className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-warm-300"
+            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-warm-300"
           />
           <div className="flex items-center gap-1.5">
             <button
               onClick={onCreate}
               disabled={isCreating || !newName.trim()}
-              className="flex items-center gap-1 px-3 py-1 text-xs rounded-full bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-3 py-1 text-xs rounded-lg bg-warm-500 text-white hover:bg-warm-600 transition-colors disabled:opacity-50"
             >
               {isCreating ? (
                 <Loader2 className="h-3 w-3 animate-spin" />

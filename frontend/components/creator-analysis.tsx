@@ -21,6 +21,8 @@ import {
   Users,
   Trash2,
 } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
+import SectionCard from "@/components/ui/section-card";
 
 type ResearchMode = "creators" | "competitors";
 
@@ -62,6 +64,7 @@ interface Report {
   error?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface ReportListItem {
   id: string;
   niche: string;
@@ -234,22 +237,18 @@ export default function CreatorAnalysis() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl tracking-tight text-[#1a1a1a] mb-1">
-          LinkedIn <span className="gradient-text">Research</span>
-        </h2>
-        <p className="text-sm text-gray-500">
-          Analyze top creators or competitors — discover strategies, writing styles, and content patterns.
-        </p>
-      </div>
+      <PageHeader
+        title="LinkedIn"
+        titleAccent="Research"
+        subtitle="Analyze top creators or competitors — discover strategies, writing styles, and content patterns."
+      />
 
       {/* Mode toggle */}
       {!selectedReport && !running && (
         <div className="flex gap-2">
           <button
             onClick={() => { setMode("creators"); setError(""); }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-full border transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl border transition-all ${
               mode === "creators"
                 ? "bg-warm-500 text-white border-warm-500"
                 : "bg-white text-gray-600 border-gray-200 hover:border-warm-300"
@@ -260,7 +259,7 @@ export default function CreatorAnalysis() {
           </button>
           <button
             onClick={() => { setMode("competitors"); setError(""); }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-full border transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl border transition-all ${
               mode === "competitors"
                 ? "bg-warm-500 text-white border-warm-500"
                 : "bg-white text-gray-600 border-gray-200 hover:border-warm-300"
@@ -274,7 +273,7 @@ export default function CreatorAnalysis() {
 
       {/* Creator input form */}
       {!selectedReport && !running && mode === "creators" && (
-        <div className="glass-card p-5 space-y-4">
+        <SectionCard index={1} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1.5">
               Niche / Keywords {creatorUrls.length > 0 && <span className="text-gray-400 font-normal">(optional)</span>}
@@ -331,17 +330,17 @@ export default function CreatorAnalysis() {
           <button
             onClick={startCreatorAnalysis}
             disabled={!niche.trim() && creatorUrls.length === 0}
-            className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+            className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 !rounded-xl"
           >
             <Sparkles className="h-4 w-4" />
             {creatorUrls.length > 0 && !niche.trim() ? "Analyze Creators" : "Analyze Top Creators"}
           </button>
-        </div>
+        </SectionCard>
       )}
 
       {/* Competitor input form */}
       {!selectedReport && !running && mode === "competitors" && (
-        <div className="glass-card p-5 space-y-4">
+        <SectionCard index={1} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1.5">
               Competitor Organizations
@@ -388,18 +387,20 @@ export default function CreatorAnalysis() {
           <button
             onClick={startCompetitorAnalysis}
             disabled={competitors.length === 0}
-            className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+            className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 !rounded-xl"
           >
             <Building2 className="h-4 w-4" />
             Analyze Competitors
           </button>
-        </div>
+        </SectionCard>
       )}
 
       {/* Running state */}
       {running && (
-        <div className="glass-card p-8 text-center space-y-3 animate-fade-in">
-          <Loader2 className="h-10 w-10 animate-spin text-warm-500 mx-auto" />
+        <div className="section-card p-10 text-center space-y-4">
+          <div className="w-14 h-14 rounded-xl bg-warm-50 flex items-center justify-center mx-auto">
+            <Loader2 className="h-6 w-6 animate-spin text-warm-500" />
+          </div>
           <p className="text-sm text-[#1a1a1a] font-medium">
             {mode === "competitors" ? "Analyzing competitor strategies..." : "Discovering and analyzing creators..."}
           </p>
@@ -418,7 +419,7 @@ export default function CreatorAnalysis() {
 
       {/* Report display */}
       {selectedReport && (
-        <div className="space-y-5 animate-fade-in">
+        <div className="space-y-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {selectedReport.status === "completed" ? (
@@ -451,7 +452,7 @@ export default function CreatorAnalysis() {
           {report && !report.error && (
             <>
               {report.executive_summary && (
-                <div className="glass-card p-5 space-y-2">
+                <div className="section-card p-5 space-y-2">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Executive Summary</h3>
                   <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                     {report.executive_summary}
@@ -460,7 +461,7 @@ export default function CreatorAnalysis() {
               )}
 
               {(selectedReport.creators_analyzed || []).length > 0 && (
-                <div className="glass-card p-5 space-y-3">
+                <div className="section-card p-5 space-y-3">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">
                     {isCompetitorReport ? "Competitors" : "Creators"} Analyzed ({selectedReport.creators_analyzed.length})
                   </h3>
@@ -486,7 +487,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.cross_creator_patterns && report.cross_creator_patterns.length > 0 && (
-                <div className="glass-card p-5 space-y-2">
+                <div className="section-card p-5 space-y-2">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">
                     {isCompetitorReport ? "Cross-Competitor" : "Cross-Creator"} Patterns
                   </h3>
@@ -502,7 +503,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.content_strategy_recommendations && report.content_strategy_recommendations.length > 0 && (
-                <div className="glass-card p-5 space-y-2">
+                <div className="section-card p-5 space-y-2">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Content Strategy Recommendations</h3>
                   <ul className="space-y-1.5">
                     {report.content_strategy_recommendations.map((r, i) => (
@@ -516,7 +517,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.top_hooks_and_formats && report.top_hooks_and_formats.length > 0 && (
-                <div className="glass-card p-5 space-y-2">
+                <div className="section-card p-5 space-y-2">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Top Hooks & Formats</h3>
                   <ul className="space-y-1.5">
                     {report.top_hooks_and_formats.map((h, i) => (
@@ -530,7 +531,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.topics_that_perform && report.topics_that_perform.length > 0 && (
-                <div className="glass-card p-5 space-y-2">
+                <div className="section-card p-5 space-y-2">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Topics That Perform</h3>
                   <div className="flex flex-wrap gap-2">
                     {report.topics_that_perform.map((t, i) => (
@@ -543,7 +544,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.style_comparison_matrix && report.style_comparison_matrix.length > 0 && (
-                <div className="glass-card p-5 space-y-3">
+                <div className="section-card p-5 space-y-3">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Style Comparison</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -569,7 +570,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.action_plan && (
-                <div className="glass-card p-5 space-y-2 border-l-4 border-warm-400">
+                <div className="section-card p-5 space-y-2 border-l-4 border-warm-400">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Action Plan</h3>
                   <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
                     {report.action_plan}
@@ -578,7 +579,7 @@ export default function CreatorAnalysis() {
               )}
 
               {report.avoid_these_mistakes && report.avoid_these_mistakes.length > 0 && (
-                <div className="glass-card p-5 space-y-2">
+                <div className="section-card p-5 space-y-2">
                   <h3 className="text-sm font-medium text-[#1a1a1a]">Avoid These Mistakes</h3>
                   <ul className="space-y-1.5">
                     {report.avoid_these_mistakes.map((m, i) => (
@@ -599,7 +600,7 @@ export default function CreatorAnalysis() {
                   {report.creators.map((creator) => {
                     const isOpen = expandedCreators.has(creator.creator_name);
                     return (
-                      <div key={creator.creator_name} className="glass-card overflow-hidden">
+                      <div key={creator.creator_name} className="section-card overflow-hidden">
                         <button
                           onClick={() => toggleCreator(creator.creator_name)}
                           className="w-full p-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
@@ -683,7 +684,7 @@ export default function CreatorAnalysis() {
           {reports.map((r) => {
             const isComp = r.niche?.startsWith("Competitor:");
             return (
-              <div key={r.id} className="glass-card p-4 w-full flex items-center justify-between hover:shadow-sm transition-shadow">
+              <div key={r.id} className="section-card p-4 w-full flex items-center justify-between">
                 <button
                   onClick={() => viewReport(r.id)}
                   disabled={loadingReport}
@@ -720,8 +721,10 @@ export default function CreatorAnalysis() {
 
       {/* Empty state */}
       {!selectedReport && !running && reports.length === 0 && (
-        <div className="glass-card p-8 text-center space-y-2">
-          <Search className="h-8 w-8 mx-auto text-gray-300" />
+        <div className="section-card p-10 text-center space-y-3">
+          <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center mx-auto">
+            <Search className="h-5 w-5 text-gray-300" />
+          </div>
           <p className="text-sm text-gray-400">
             No reports yet. Choose a research mode above to get started.
           </p>
@@ -730,7 +733,7 @@ export default function CreatorAnalysis() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-100 text-sm text-red-600 animate-fade-in">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {error}
         </div>

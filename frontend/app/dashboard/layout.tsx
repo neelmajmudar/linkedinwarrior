@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { apiPost, apiGet } from "@/lib/api";
-import { usePersona, useLinkedinStatus, useGmailStatus, useOrgs } from "@/lib/queries";
+import { usePersona, useLinkedinStatus, useGmailStatus } from "@/lib/queries";
 import OrgSwitcher from "@/components/org-switcher";
 import dynamic from "next/dynamic";
 import { TaskNotificationProvider, useTaskNotifications } from "@/components/task-notifications";
@@ -146,37 +146,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function DashboardSkeleton() {
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Sidebar skeleton */}
-      <aside className="w-56 border-r border-gray-200 bg-white flex-shrink-0">
-        <div className="p-4 border-b border-gray-200">
+    <div className="min-h-screen bg-[#fafafa] flex">
+      {/* Sidebar skeleton — light */}
+      <aside className="w-56 bg-white border-r border-gray-100 flex-shrink-0">
+        <div className="p-4 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-warm-500 flex items-center justify-center">
-              <Sword className="h-4 w-4 text-white" />
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-warm-400 to-warm-600 flex items-center justify-center">
+              <Sword className="h-3.5 w-3.5 text-white" />
             </div>
-            <span className="text-lg tracking-tight text-[#1a1a1a]">LinkedInWarrior</span>
+            <span className="text-base tracking-tight text-[#1a1a1a] font-medium">LinkedInWarrior</span>
           </div>
         </div>
         <div className="p-3 space-y-2">
-          <div className="skeleton h-3 w-16 rounded mb-2" />
+          <div className="h-3 w-16 rounded mb-2 bg-gray-100" />
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton h-8 w-full rounded" />
+            <div key={i} className="h-8 w-full rounded-lg bg-gray-50" />
           ))}
-          <div className="my-3 border-t border-gray-200" />
-          <div className="skeleton h-3 w-12 rounded mb-2" />
-          <div className="skeleton h-8 w-full rounded" />
+          <div className="my-3 border-t border-gray-100" />
+          <div className="h-3 w-12 rounded mb-2 bg-gray-100" />
+          <div className="h-8 w-full rounded-lg bg-gray-50" />
         </div>
       </aside>
       {/* Content skeleton */}
       <div className="flex-1">
-        <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-end">
-          <div className="skeleton h-8 w-36 rounded-full" />
-        </header>
-        <main className="max-w-4xl mx-auto px-6 py-8">
-          <div className="space-y-4">
-            <div className="skeleton h-8 w-48 rounded" />
-            <div className="skeleton h-4 w-72 rounded" />
-            <div className="skeleton h-32 w-full rounded-lg" />
+        <main className="max-w-5xl mx-auto px-8 py-10">
+          <div className="space-y-5">
+            <div className="skeleton h-9 w-56 rounded-lg" />
+            <div className="skeleton h-4 w-80 rounded" />
+            <div className="skeleton h-36 w-full rounded-xl" />
           </div>
         </main>
       </div>
@@ -201,10 +198,10 @@ function SidebarLink({
       href={tab.href}
       prefetch
       title={collapsed ? tab.label : undefined}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+      className={`sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
         isActive
-          ? "bg-[#1a1a1a] text-white"
-          : "text-gray-500 hover:text-[#1a1a1a] hover:bg-gray-100"
+          ? "active"
+          : ""
       } ${collapsed ? "justify-center" : ""}`}
     >
       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -420,18 +417,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   // ── Normal dashboard ──
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* ── Sidebar ── */}
+    <div className="min-h-screen bg-[#fafafa] flex">
+      {/* ── Sidebar — Light ── */}
       <aside
-        className={`fixed top-0 left-0 h-full z-40 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out ${
+        className={`sidebar-light fixed top-0 left-0 h-full z-40 flex flex-col transition-all duration-300 ease-in-out ${
           sidebarOpen ? "w-56" : "w-[52px]"
         }`}
       >
         {/* Logo + toggle */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200">
+        <div className="flex items-center justify-between px-3 py-3 border-b border-gray-100">
           {sidebarOpen && (
             <a href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity cursor-pointer">
-              <div className="w-7 h-7 rounded-full bg-warm-500 flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-warm-400 to-warm-600 flex items-center justify-center flex-shrink-0">
                 <Sword className="h-3.5 w-3.5 text-white" />
               </div>
               <span className="text-base tracking-tight text-[#1a1a1a] font-medium whitespace-nowrap">
@@ -453,7 +450,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Org switcher */}
-        <div className="px-2 py-2 border-b border-gray-200">
+        <div className="px-2 py-2 border-b border-gray-100">
           <OrgSwitcher collapsed={!sidebarOpen} />
         </div>
 
@@ -462,14 +459,14 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             {/* LinkedIn section */}
             {sidebarOpen && (
               <div className="px-2 mb-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <span className="sidebar-section-label text-[11px] font-semibold uppercase tracking-wider">
                   LinkedIn
                 </span>
               </div>
             )}
             {!sidebarOpen && (
               <div className="flex justify-center mb-1.5">
-                <Linkedin className="h-3.5 w-3.5 text-gray-400" />
+                <Linkedin className="h-3.5 w-3.5 text-gray-300" />
               </div>
             )}
             <div className="space-y-0.5">
@@ -480,19 +477,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Separator */}
-            <div className="my-3 mx-2 border-t border-gray-200" />
+            <div className="sidebar-divider my-3 mx-2 border-t" />
 
             {/* Email section */}
             {sidebarOpen && (
               <div className="px-2 mb-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <span className="sidebar-section-label text-[11px] font-semibold uppercase tracking-wider">
                   Email
                 </span>
               </div>
             )}
             {!sidebarOpen && (
               <div className="flex justify-center mb-1.5">
-                <Mail className="h-3.5 w-3.5 text-gray-400" />
+                <Mail className="h-3.5 w-3.5 text-gray-300" />
               </div>
             )}
             <div className="space-y-0.5">
@@ -503,19 +500,19 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Separator */}
-            <div className="my-3 mx-2 border-t border-gray-200" />
+            <div className="sidebar-divider my-3 mx-2 border-t" />
 
             {/* Team section */}
             {sidebarOpen && (
               <div className="px-2 mb-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <span className="sidebar-section-label text-[11px] font-semibold uppercase tracking-wider">
                   Team
                 </span>
               </div>
             )}
             {!sidebarOpen && (
               <div className="flex justify-center mb-1.5">
-                <Users className="h-3.5 w-3.5 text-gray-400" />
+                <Users className="h-3.5 w-3.5 text-gray-300" />
               </div>
             )}
             <div className="space-y-0.5">
@@ -527,18 +524,18 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Bottom: connection status + sign out */}
-        <div className="border-t border-gray-200 px-2 py-3 space-y-1">
+        <div className="border-t border-gray-100 px-2 py-3 space-y-1">
           {linkedinConnected ? (
             <div className={`flex items-center gap-2 px-3 py-1.5 text-sm ${!sidebarOpen ? "justify-center" : ""}`}>
-              <Linkedin className="h-4 w-4 text-green-600 flex-shrink-0" />
-              {sidebarOpen && <span className="text-green-700 font-medium text-xs">Connected</span>}
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+              {sidebarOpen && <span className="text-emerald-600 font-medium text-xs">LinkedIn</span>}
             </div>
           ) : (
             <button
               onClick={connectLinkedin}
               disabled={connecting}
               title={!sidebarOpen ? (connecting ? "Connecting…" : "Connect LinkedIn") : undefined}
-              className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-[#1a1a1a] text-white hover:bg-[#333] transition-colors disabled:opacity-50 w-full ${
+              className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-warm-500 text-white hover:bg-warm-600 transition-colors disabled:opacity-50 w-full ${
                 !sidebarOpen ? "justify-center" : ""
               }`}
             >
@@ -552,8 +549,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           )}
           {gmailConnected && (
             <div className={`flex items-center gap-2 px-3 py-1.5 text-sm ${!sidebarOpen ? "justify-center" : ""}`}>
-              <Mail className="h-4 w-4 text-green-600 flex-shrink-0" />
-              {sidebarOpen && <span className="text-green-700 font-medium text-xs">Gmail</span>}
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+              {sidebarOpen && <span className="text-emerald-600 font-medium text-xs">Gmail</span>}
             </div>
           )}
           <button
@@ -577,15 +574,15 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         {/* Processing banner — only show after persona query has loaded (prevents flash on hard refresh) */}
         {!personaReady && onboardingDismissed && !tourActive && onboardingStatus !== "loading" && (
-          <div className="sticky top-0 z-30 bg-warm-50 border-b border-warm-200 px-4 py-2.5 flex items-center justify-center gap-2">
+          <div className="sticky top-0 z-30 px-4 py-2.5 flex items-center justify-center gap-2" style={{ background: "linear-gradient(90deg, rgba(221,205,196,0.3), rgba(198,159,135,0.2), rgba(221,205,196,0.3))" }}>
             <Loader2 className="h-4 w-4 animate-spin text-warm-500" />
             <span className="text-sm text-warm-700">
               {personaStatus || "Building your voice profile..."}
             </span>
           </div>
         )}
-        <main className="max-w-4xl mx-auto px-6 py-8">
-          <div className="animate-fade-in">{children}</div>
+        <main className="max-w-5xl mx-auto px-8 py-10">
+          {children}
         </main>
       </div>
 

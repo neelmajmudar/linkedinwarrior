@@ -28,6 +28,8 @@ import {
   ChevronRight,
   ExternalLink,
 } from "lucide-react";
+import PageHeader from "@/components/ui/page-header";
+import SectionCard from "@/components/ui/section-card";
 
 interface CommentPreview {
   comment_id: string;
@@ -40,6 +42,7 @@ interface CommentPreview {
   post_author_url?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HistoryItem {
   id: string;
   post_social_id: string;
@@ -242,22 +245,19 @@ export default function Engagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl tracking-tight text-[#1a1a1a] mb-1">
-            Auto <span className="gradient-text">Engage</span>
-          </h2>
-          <p className="text-sm text-gray-500">
-            Find relevant posts and generate personalized comments in your voice.
-          </p>
-        </div>
-        <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-          {remaining}/{dailyLimit} comments left today
-        </span>
-      </div>
+      <PageHeader
+        title="Auto"
+        titleAccent="Engage"
+        subtitle="Find relevant posts and generate personalized comments in your voice."
+        actions={
+          <span className="text-xs text-warm-600 bg-warm-50 px-3 py-1.5 rounded-xl border border-warm-200/50 font-medium">
+            {remaining}/{dailyLimit} comments left today
+          </span>
+        }
+      />
 
       {/* Topics configuration */}
-      <div className="glass-card p-4 space-y-3">
+      <SectionCard index={1} className="space-y-3">
         <h3 className="text-sm font-medium text-[#1a1a1a]">Engagement Topics</h3>
         <div className="flex flex-wrap gap-2">
           {topics.map((topic) => (
@@ -298,13 +298,13 @@ export default function Engagement() {
             Add
           </button>
         </div>
-      </div>
+      </SectionCard>
 
       {/* Search button */}
       <button
         onClick={searchPosts}
         disabled={searching || topics.length === 0 || remaining <= 0}
-        className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+        className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 !rounded-xl"
       >
         {searching ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -326,7 +326,7 @@ export default function Engagement() {
             return (
             <div
               key={preview.comment_id}
-              className="glass-card p-4 space-y-3"
+              className="section-card p-5 space-y-3"
             >
               {/* Post info */}
               <div className="space-y-1">
@@ -463,7 +463,7 @@ export default function Engagement() {
       <div className="pt-4">
         <button
           onClick={() => setShowHistory((prev) => !prev)}
-          className="btn-ghost w-full py-2.5 text-sm flex items-center justify-center gap-2 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+          className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2 border border-gray-200 rounded-xl hover:bg-warm-50 hover:border-warm-200 transition-all"
         >
           <History className="h-4 w-4 text-green-600" />
           {showHistory ? "Hide History" : "View Published History"}
@@ -475,7 +475,7 @@ export default function Engagement() {
 
       {/* Published comments history section (lazy-loaded on toggle) */}
       {showHistory && (
-        <div className="space-y-3 pt-2 animate-fade-in">
+        <div className="space-y-3 pt-2">
           {publishedHistory.length > 0 ? (
             <>
               <div className="flex items-center gap-2">
@@ -488,7 +488,7 @@ export default function Engagement() {
                 const isExpanded = expandedPosts.has(`h-${item.id}`);
                 const isLong = item.post_content.length > 150;
                 return (
-                  <div key={item.id} className="glass-card p-4 space-y-2">
+                  <div key={item.id} className="section-card p-5 space-y-2">
                     <div className="flex items-center justify-between">
                       {item.post_author_url ? (
                         <a
@@ -579,13 +579,13 @@ export default function Engagement() {
 
       {/* Messages */}
       {message && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 border border-green-100 text-sm text-green-700 animate-fade-in">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-100 text-sm text-emerald-700">
           <Check className="h-4 w-4 shrink-0" />
           {message}
         </div>
       )}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-100 text-sm text-red-600 animate-fade-in">
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
           {error}
         </div>
       )}
